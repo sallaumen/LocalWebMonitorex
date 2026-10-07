@@ -1,0 +1,84 @@
+name: Linux package
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - bin/build-deb
+      - packaging/**
+      - lib/local_web_monitorex/capture_runtime.ex
+      - lib/local_web_monitorex/previews.ex
+      - assets/**
+      - mix.exs
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux-deb:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3"
+          elixir-version: "1.19.5-otp-27"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - run: ./bin/build-deb
+      - run: sudo apt-get install -y ./dist/*.deb
+      - name: Smoke test installed dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          localwebmonitorex start > /tmp/localwebmonitorex-smoke.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..60}; do
+            if curl -fsS http://localhost:4100/ > /tmp/localwebmonitorex-smoke.html 2>/dev/null; then
+              break
+            fi
+            sleep 0.5
+          done
+          grep -q 'in range 4000–4099' /tmp/localwebmonitorex-smoke.html
+      - name: Smoke test bundled preview tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo localwebmonitorex install-browser-deps
+          localwebmonitorex install-browser
+          python3 -m http.server 4055 --bind 127.0.0.1 > /tmp/localwebmonitorex-demo.log 2>&1 &
+          demo_pid=$!
+          trap 'kill "$demo_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl -fsS http://127.0.0.1:4055/ > /dev/null 2>&1; then
+              break
+            fi
+            sleep 0.25
+          done
+          priv_dir=(/opt/localwebmonitorex/lib/local_web_monitorex-*/priv)
+          "${priv_dir[0]}/node/bin/node" "${priv_dir[0]}/capture.mjs" \
+            http://127.0.0.1:4055 /tmp/localwebmonitorex-preview.png
+          test -s /tmp/localwebmonitorex-preview.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: localwebmonitorex-linux-amd64
+          path: dist/*
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --title "LocalWebMonitorex $GITHUB_REF_NAME" --generate-notes
+          fi

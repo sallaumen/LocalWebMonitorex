@@ -36,5 +36,9 @@ local_web_monitorex-*.tar
 # In case you use Node.js/npm, you want to ignore these.
 npm-debug.log
 /assets/node_modules/
+/priv/capture.mjs
+/priv/node/
+/priv/node_modules/
+/dist/
 .DS_Store
 /.playwright-mcp/

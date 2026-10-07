@@ -4,7 +4,7 @@
 
 LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps running on your computer and gives each one a live card. See the port, page preview, HTTP status, response time, and—when the operating system exposes it—the listening process, CPU usage, and resident memory. Open any app with one click.
 
-[![CI](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml/badge.svg)](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-305444)](LICENSE)
+[![CI](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml/badge.svg)](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml) [![Linux package](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/release.yml/badge.svg)](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/release.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-305444)](LICENSE)
 
 ![LocalWebMonitorex dashboard showing four sample web apps on ports 4055 through 4058](docs/screenshots/dashboard.png)
 
@@ -16,12 +16,12 @@ LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps 
 - **Recognize a page before opening it.** WebKit captures previews sequentially while a dashboard tab is connected, with at least 30 seconds between captures of the same port.
 - **See the process behind a port.** The OS adapter adds the listener's name, PID, CPU percentage, and resident memory when available. Missing permissions or tools are shown as unavailable data.
 - **Keep everything on your machine.** The server binds to `127.0.0.1`. There is no account, database, or remote monitoring service.
-- **Start with your Mac.** A user LaunchAgent can build the app and start it at login.
+- **Keep it ready after login.** Use the macOS LaunchAgent or the Linux package's user service.
 
 | Platform | Dashboard and previews | Process details | Login startup |
 | --- | --- | --- | --- |
 | macOS | Supported | PID, CPU, memory via `lsof` and `ps` | LaunchAgent installer |
-| Linux | Supported | PID, CPU, memory when `lsof` and `ps` are installed | Manual setup |
+| Linux | Supported | PID, CPU, memory when `lsof` and `ps` are installed | User service in the .deb |
 | Windows | Supported through PowerShell | PID and memory through `Get-NetTCPConnection` and `Get-Process`; CPU shown as unavailable | Manual setup |
 
 <details>
@@ -29,7 +29,31 @@ LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps 
 <p><img src="docs/screenshots/mobile.png" alt="LocalWebMonitorex mobile dashboard with four local sites" width="375"></p>
 </details>
 
-## Quick start
+## Install
+
+### Ubuntu 24.04, amd64
+
+Download the latest `localwebmonitorex_*_amd64.deb` from [GitHub Releases](https://github.com/sallaumen/LocalWebMonitorex/releases). It includes the Elixir release, Erlang runtime, web assets, Node.js, Playwright code, a desktop icon, and a user service. You do not need Elixir or npm on the target computer.
+
+```bash
+sudo apt install ./localwebmonitorex_*_amd64.deb
+systemctl --user daemon-reload
+systemctl --user enable --now localwebmonitorex
+localwebmonitorex open
+```
+
+Open **[http://localhost:4100](http://localhost:4100)**. The desktop launcher also starts the user service and opens the dashboard. The service binds only to `127.0.0.1`. After changing Settings, apply them with `systemctl --user restart localwebmonitorex`.
+
+Page previews need a one-time WebKit setup. The dashboard and process list work before this step:
+
+```bash
+sudo localwebmonitorex install-browser-deps
+localwebmonitorex install-browser
+```
+
+The package is built and smoke-tested on Ubuntu 24.04 amd64. Other Linux distributions can use the source setup below.
+
+### Run from source
 
 You need Elixir 1.15+ with a compatible Erlang/OTP version, Node.js 20+, npm, and Playwright WebKit. The process tools are optional; service discovery still works without process metrics. See the official [Elixir installation guide](https://elixir-lang.org/install/) and [Playwright browser guide](https://playwright.dev/docs/browsers) for platform prerequisites.
 
@@ -59,7 +83,7 @@ mix assets.build
 mix phx.server
 ```
 
-The dashboard opens at the same `http://localhost:4100` address. If a screenshot tool is unavailable, the card remains usable and shows a preview placeholder. Automatic login startup is currently provided only for macOS.
+The dashboard opens at the same `http://localhost:4100` address. If a screenshot tool is unavailable, the card remains usable and shows a preview placeholder. Automatic login startup is available through the macOS installer or Linux .deb.
 
 ### Start automatically on macOS
 
@@ -124,6 +148,9 @@ mix test
 mix format --check-formatted
 mix compile --warnings-as-errors
 MIX_ENV=prod mix assets.deploy
+./bin/build-deb # Ubuntu 24.04 amd64 only
 ```
+
+The package is assembled with [`mix release`](https://hexdocs.pm/mix/Mix.Tasks.Release.html), then wrapped as a Debian archive. Tags matching `v*` trigger the [release workflow](.github/workflows/release.yml), which smoke-tests the installed app and bundled preview tools before uploading the `.deb` and SHA-256 checksum to GitHub Releases.
 
 The project conventions in [`AGENTS.md`](AGENTS.md) and [`CLAUDE.md`](CLAUDE.md) adapt quality guidance from Forrozin to this local utility. The source is licensed under [MIT](LICENSE).

@@ -6,6 +6,7 @@ defmodule LocalWebMonitorex.Previews do
   require Logger
 
   alias LocalWebMonitorex.Service
+  alias LocalWebMonitorex.CaptureRuntime
 
   @topic "previews"
   @refresh_ms 30_000
@@ -138,10 +139,10 @@ defmodule LocalWebMonitorex.Previews do
   end
 
   defp capture(service, path) do
-    script = Path.expand("../../assets/capture.mjs", __DIR__)
+    {node, script} = CaptureRuntime.paths()
     url = "#{service.scheme}://127.0.0.1:#{service.port}/"
 
-    case System.cmd("node", [script, url, path], stderr_to_stdout: true) do
+    case System.cmd(node, [script, url, path], stderr_to_stdout: true) do
       {_output, 0} -> :ok
       {output, _status} -> {:error, String.slice(String.trim(output), 0, 200)}
     end
