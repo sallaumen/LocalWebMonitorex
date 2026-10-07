@@ -6,9 +6,9 @@ LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps 
 
 [![CI](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml/badge.svg)](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml) [![Linux package](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/release.yml/badge.svg)](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/release.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-305444)](LICENSE)
 
-![LocalWebMonitorex dark dashboard monitoring six local web apps on ports 4006, 4009, 4013, 4055, 4056, and 4500](docs/screenshots/dashboard.png)
+![LocalWebMonitorex dark dashboard with six local web apps and process stop controls on ports 4004, 4006, 4010, 4013, 4055, and 4056](docs/screenshots/dashboard.png)
 
-<sub>Dark mode on the default <code>localhost:4100</code> dashboard, watching ports 4000–4500. Local projects run on 4006, 4009, and 4013; temporary demo sites run on 4055, 4056, and 4500.</sub>
+<sub>Dark mode on the default <code>localhost:4100</code> dashboard, watching ports 4000–4500. Local projects run on 4004, 4006, 4010, and 4013; temporary demo sites run on 4055 and 4056.</sub>
 
 ## Why use it?
 
@@ -16,16 +16,19 @@ LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps 
 - **Make it yours.** Appearance follows the operating system by default. Choose Light or Dark in Settings to keep that preference across browser and computer restarts.
 - **Recognize a page before opening it.** WebKit captures previews sequentially while a dashboard tab is connected, with at least 30 seconds between captures of the same port. Click a thumbnail to inspect the full snapshot; use the separate link to open the app.
 - **See the process behind a port.** The OS adapter adds the listener's name, PID, CPU percentage, and resident memory when available. Missing permissions or tools are shown as unavailable data.
+- **Stop a server deliberately.** A process card offers a red hover action and a confirmation showing its name, PID, and port. LocalWebMonitorex rechecks the listener before sending a stop request and protects its own process.
 - **Keep everything on your machine.** The server binds to `127.0.0.1`. There is no account, database, or remote monitoring service.
 - **Keep it ready after login.** Use the macOS LaunchAgent or the Linux package's user service.
 
-| Platform | Dashboard and previews | Process details | Login startup |
+| Platform | Dashboard and previews | Process details and stop action | Login startup |
 | --- | --- | --- | --- |
-| macOS | Supported | PID, CPU, memory via `lsof` and `ps` | LaunchAgent installer |
-| Linux | Supported | PID, CPU, memory when `lsof` and `ps` are installed | User service in the .deb |
-| Windows | Supported through PowerShell | PID and memory through `Get-NetTCPConnection` and `Get-Process`; CPU shown as unavailable | Manual setup |
+| macOS | Supported | PID, CPU, memory via `lsof` and `ps`; stop with `SIGTERM` | LaunchAgent installer |
+| Linux | Supported | PID, CPU, memory when `lsof` and `ps` are installed; stop with `SIGTERM` | User service in the .deb |
+| Windows | Supported through PowerShell | PID and memory through `Get-NetTCPConnection` and `Get-Process`; CPU shown as unavailable; stop by PID with `taskkill` | Manual setup |
 
 On startup, **Overview** is the focus: no port is selected. The dashboard listens on **4100**, scans **4000–4500** by default, and shows a card only when a web server responds. Open a thumbnail to inspect its snapshot, or use its URL to enter the app.
+
+To stop an app, use **Stop process** on its card and confirm the listener identity. The action appears only when a process can be identified. It sends `SIGTERM` on macOS/Linux or ends that PID with `taskkill /F` on Windows. It does not kill child processes as a group. One process may serve several ports, so stopping it may close multiple cards. If the PID changed, the app refuses the request and asks you to refresh. OS permissions can still deny the command.
 
 ## Install
 

@@ -60,6 +60,33 @@ const PreviewDialog = {
   },
 }
 
+const StopDialog = {
+  mounted() {
+    this.returnFocus = document.activeElement
+    this.onCancel = event => {
+      event.preventDefault()
+      this.pushEvent("cancel_stop", {})
+    }
+    this.el.addEventListener("cancel", this.onCancel)
+    this.el.showModal()
+    this.el.querySelector("[data-stop-cancel]").focus()
+  },
+  updated() {
+    const stopping = this.el.dataset.stopping === "true"
+    this.el.querySelector("[data-stop-cancel]").disabled = stopping
+    this.el.querySelector("[data-stop-submit]").disabled = stopping
+    this.el.querySelector("[data-stop-label]").textContent = stopping ? "Stopping…" : "Stop process"
+  },
+  destroyed() {
+    requestAnimationFrame(() => {
+      const trigger = document.querySelector(`button[phx-click="confirm_stop"][phx-value-port="${this.el.dataset.stopPort}"]`)
+      const fallback = document.querySelector("#service-filter input")
+      const focusTarget = trigger || (this.returnFocus?.isConnected ? this.returnFocus : null) || fallback
+      focusTarget?.focus()
+    })
+  },
+}
+
 const themeQuery = window.matchMedia("(prefers-color-scheme: dark)")
 
 const ThemePreferences = {
@@ -99,7 +126,7 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, PreviewDialog, ThemePreferences},
+  hooks: {...colocatedHooks, PreviewDialog, StopDialog, ThemePreferences},
 })
 
 // Show progress bar on live navigation and form submits

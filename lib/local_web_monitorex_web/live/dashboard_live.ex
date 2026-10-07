@@ -1,8 +1,11 @@
 defmodule LocalWebMonitorexWeb.DashboardLive do
   use LocalWebMonitorexWeb, :live_view
 
+  import LocalWebMonitorexWeb.StopDialog
+
   alias LocalWebMonitorex.Monitor
   alias LocalWebMonitorex.Previews
+  alias LocalWebMonitorex.ProcessTerminator
   alias LocalWebMonitorex.Service
   alias LocalWebMonitorex.Settings
 
@@ -31,6 +34,9 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
      |> assign(:query, "")
      |> assign(:settings_open, false)
      |> assign(:selected_service, nil)
+     |> assign(:stop_target, nil)
+     |> assign(:stop_task, nil)
+     |> assign(:notice, nil)
      |> assign(:saved_port, Settings.read_port())
      |> assign(:port_error, nil)
      |> assign(:port_saved, false)
@@ -74,6 +80,42 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
 
   def handle_event("close_preview", _params, socket) do
     {:noreply, assign(socket, :selected_service, nil)}
+  end
+
+  def handle_event("confirm_stop", %{"port" => raw_port}, socket) do
+    target = find_service(socket.assigns.services, raw_port)
+
+    if target && target.process do
+      {:noreply, assign(socket, :stop_target, target)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("cancel_stop", _params, %{assigns: %{stop_task: nil}} = socket) do
+    {:noreply, assign(socket, :stop_target, nil)}
+  end
+
+  def handle_event("cancel_stop", _params, socket), do: {:noreply, socket}
+
+  def handle_event("clear_notice", _params, socket), do: {:noreply, assign(socket, :notice, nil)}
+
+  def handle_event("stop_process", _params, %{assigns: %{stop_target: nil}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("stop_process", _params, %{assigns: %{stop_task: task}} = socket)
+      when not is_nil(task), do: {:noreply, socket}
+
+  def handle_event("stop_process", _params, socket) do
+    target = socket.assigns.stop_target
+    terminator = Application.get_env(:local_web_monitorex, :process_terminator, ProcessTerminator)
+
+    task =
+      Task.Supervisor.async_nolink(LocalWebMonitorex.TaskSupervisor, fn ->
+        terminator.stop(target)
+      end)
+
+    {:noreply, assign(socket, :stop_task, task.ref)}
   end
 
   def handle_event("save_port", %{"port" => port}, socket) do
@@ -139,6 +181,15 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
      |> assign(:previews, Map.merge(socket.assigns.previews, preview_versions(snapshot.services)))}
   end
 
+  def handle_info({ref, result}, %{assigns: %{stop_task: ref}} = socket) do
+    Process.demonitor(ref, [:flush])
+    {:noreply, finish_stop(socket, result)}
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, %{assigns: %{stop_task: ref}} = socket) do
+    {:noreply, finish_stop(socket, {:error, :command_failed})}
+  end
+
   def handle_info({:preview_ready, port, version}, socket) do
     {:noreply, update(socket, :previews, &Map.put(&1, port, version))}
   end
@@ -191,6 +242,13 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
             phx-click="open_settings"
             aria-label="Settings"
           ><.icon name="hero-cog-6-tooth" class="icon" /></button>
+        </div>
+        <div :if={@notice} class={["app-notice", @notice.kind]} role={notice_role(@notice.kind)}>
+          <.icon name={notice_icon(@notice.kind)} class="icon" />
+          <span>{@notice.text}</span>
+          <button type="button" phx-click="clear_notice" aria-label="Dismiss message">
+            <.icon name="hero-x-mark" class="icon" />
+          </button>
         </div>
         <header class="page-head">
           <div>
@@ -331,6 +389,17 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
                 <div :if={is_nil(service.process)} class="process-unavailable">
                   Process metrics unavailable
                 </div>
+                <div :if={service.process} class="process-actions">
+                  <button
+                    type="button"
+                    class="process-stop"
+                    phx-click="confirm_stop"
+                    phx-value-port={service.port}
+                    aria-label={"Stop process #{service.process.name}, PID #{service.process.pid}, on port #{service.port}"}
+                  >
+                    <.icon name="hero-stop-circle" class="icon" /> Stop process
+                  </button>
+                </div>
                 <div class="card-bottom">
                   <a href={Service.url(service)} target="_blank" rel="noopener noreferrer">{Service.url(
                     service
@@ -392,6 +461,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
           <span>{Service.url(@selected_service)}</span><span>Snapshot refreshes while the dashboard is open</span>
         </div>
       </dialog>
+      <.stop_dialog :if={@stop_target} target={@stop_target} stopping={not is_nil(@stop_task)} />
       <div :if={@settings_open} class="settings-scrim" phx-click="close_settings"></div>
       <section
         :if={@settings_open}
@@ -506,9 +576,17 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   defp request_previews(services), do: Enum.each(services, &Previews.request/1)
 
   defp preview_service(socket, raw_port) do
-    with {port, ""} <- Integer.parse(raw_port),
-         version when not is_nil(version) <- socket.assigns.previews[port] do
-      Enum.find(socket.assigns.services, &(&1.port == port))
+    with %Service{} = service <- find_service(socket.assigns.services, raw_port),
+         version when not is_nil(version) <- socket.assigns.previews[service.port] do
+      service
+    else
+      _ -> nil
+    end
+  end
+
+  defp find_service(services, raw_port) do
+    with {port, ""} <- Integer.parse(raw_port) do
+      Enum.find(services, &(&1.port == port))
     else
       _ -> nil
     end
@@ -519,6 +597,40 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   defp current_selection(selected, services) do
     Enum.find(services, &(&1.port == selected.port))
   end
+
+  defp finish_stop(socket, :ok) do
+    target = socket.assigns.stop_target
+    Monitor.refresh()
+
+    socket
+    |> assign(:stop_task, nil)
+    |> assign(:stop_target, nil)
+    |> assign(:notice, %{kind: :info, text: "Stop request sent to PID #{target.process.pid}."})
+  end
+
+  defp finish_stop(socket, {:error, :stale_process}) do
+    socket
+    |> assign(:stop_task, nil)
+    |> assign(:stop_target, nil)
+    |> assign(:notice, %{kind: :error, text: "The listener changed. Refresh and try again."})
+  end
+
+  defp finish_stop(socket, {:error, reason}) do
+    socket
+    |> assign(:stop_task, nil)
+    |> assign(:stop_target, nil)
+    |> assign(:notice, %{kind: :error, text: stop_error(reason)})
+  end
+
+  defp notice_role(:error), do: "alert"
+  defp notice_role(:info), do: "status"
+  defp notice_icon(:error), do: "hero-exclamation-triangle"
+  defp notice_icon(:info), do: "hero-check-circle"
+
+  defp stop_error(:protected_process), do: "LocalWebMonitorex cannot stop its own process."
+  defp stop_error(:unsupported_os), do: "Stopping processes is unavailable on this system."
+  defp stop_error(:timeout), do: "The operating system did not respond. Try again."
+  defp stop_error(_reason), do: "Could not stop this process. Check permissions and try again."
 
   defp preview_versions(services) do
     Map.new(services, fn service -> {service.port, Previews.version(service.port)} end)
