@@ -12,7 +12,7 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
     assert html =~ "LocalWebMonitorex"
     assert html =~ "localhost:#{Application.fetch_env!(:local_web_monitorex, :dashboard_port)}"
     assert html =~ "Active ports"
-    assert html =~ "4000–4099"
+    assert html =~ "4000–4500"
     refute html =~ "Main port"
     refute html =~ "Visão geral"
   end
@@ -79,6 +79,15 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
              "Saved. Restart"
 
     assert File.read!(path) == "4321\n"
+  end
+
+  test "offers system, light, and dark appearance choices", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    render_click(element(view, "button.rail-button"))
+
+    for choice <- ~w(auto light dark) do
+      assert has_element?(view, "button[data-theme-choice=#{choice}]")
+    end
   end
 
   test "saves the next watched range from settings", %{conn: conn} do

@@ -24,6 +24,7 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/local_web_monitorex"
 import topbar from "../vendor/topbar"
+import {readTheme, resolveTheme, saveTheme} from "./theme.mjs"
 
 const PreviewDialog = {
   mounted() {
@@ -59,11 +60,46 @@ const PreviewDialog = {
   },
 }
 
+const themeQuery = window.matchMedia("(prefers-color-scheme: dark)")
+
+const ThemePreferences = {
+  mounted() {
+    this.preference = readTheme(() => window.localStorage)
+    this.persistenceFailed = false
+    this.onThemeClick = event => {
+      const button = event.target.closest("[data-theme-choice]")
+      if (!button || !this.el.contains(button)) return
+      this.preference = button.dataset.themeChoice
+      this.persistenceFailed = !saveTheme(() => window.localStorage, this.preference)
+      this.applyTheme()
+    }
+    this.onSystemChange = () => {
+      if (this.preference === "auto") this.applyTheme()
+    }
+    this.el.addEventListener("click", this.onThemeClick)
+    themeQuery.addEventListener("change", this.onSystemChange)
+    this.applyTheme()
+  },
+  updated() { this.applyTheme() },
+  destroyed() {
+    this.el.removeEventListener("click", this.onThemeClick)
+    themeQuery.removeEventListener("change", this.onSystemChange)
+  },
+  applyTheme() {
+    document.documentElement.dataset.theme = resolveTheme(this.preference, themeQuery.matches)
+    this.el.querySelectorAll("[data-theme-choice]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.themeChoice === this.preference))
+    })
+    const warning = this.el.querySelector("[data-theme-storage-warning]")
+    if (warning) warning.hidden = !this.persistenceFailed
+  },
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, PreviewDialog},
+  hooks: {...colocatedHooks, PreviewDialog, ThemePreferences},
 })
 
 // Show progress bar on live navigation and form submits

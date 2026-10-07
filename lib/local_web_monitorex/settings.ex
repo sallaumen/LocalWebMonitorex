@@ -2,7 +2,7 @@ defmodule LocalWebMonitorex.Settings do
   @moduledoc "Stores dashboard and watched-range preferences in local files."
 
   @default_port 4100
-  @default_range 4000..4099
+  @default_range 4000..4500
   @max_range_size 1000
 
   @spec path() :: String.t()

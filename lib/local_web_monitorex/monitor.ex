@@ -29,7 +29,7 @@ defmodule LocalWebMonitorex.Monitor do
       Keyword.get(
         opts,
         :ports,
-        Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4099)
+        Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4500)
       )
 
     state = %{

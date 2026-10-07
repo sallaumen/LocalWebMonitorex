@@ -38,6 +38,8 @@ defmodule LocalWebMonitorex.PortProbe.HttpTest do
 
     task =
       Task.async(fn ->
+        {:ok, check_socket} = :gen_tcp.accept(listener)
+        :gen_tcp.close(check_socket)
         {:ok, socket} = :gen_tcp.accept(listener)
         {:ok, _request} = :gen_tcp.recv(socket, 0, 1_000)
         Process.sleep(delay_ms)

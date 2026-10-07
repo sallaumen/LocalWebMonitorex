@@ -29,8 +29,8 @@ defmodule LocalWebMonitorex.SettingsTest do
     assert Settings.read_port(path) == 4100
   end
 
-  test "uses ports 4000 through 4099 when no range preference exists" do
-    assert Settings.read_range(temporary_path("range")) == 4000..4099
+  test "uses ports 4000 through 4500 when no range preference exists" do
+    assert Settings.read_range(temporary_path("range")) == 4000..4500
   end
 
   test "saves a valid watched range for the next startup" do
