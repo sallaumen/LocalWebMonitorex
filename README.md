@@ -6,14 +6,14 @@ LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps 
 
 [![CI](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml/badge.svg)](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml) [![Linux package](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/release.yml/badge.svg)](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/release.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-305444)](LICENSE)
 
-![LocalWebMonitorex dashboard showing four sample web apps on ports 4055 through 4058](docs/screenshots/dashboard.png)
+![LocalWebMonitorex dashboard monitoring six local web apps on ports 4006, 4009, 4013, and 4055 through 4057](docs/screenshots/dashboard.png)
 
-<sub>These captures show four temporary sample sites on ports 4055–4058. The screenshot session used dashboard port 4381; the product default is 4100. No contributor apps or private pages appear.</sub>
+<sub>Captured at the default <code>localhost:4100</code> dashboard with the default 4000–4099 watched range. Local projects run on 4006, 4009, and 4013; temporary demo sites run on 4055–4057.</sub>
 
 ## Why use it?
 
-- **Find servers as they come and go.** Ports 4000–4099 are checked every 5 seconds by default. Only responding web apps appear; the dashboard excludes its own port.
-- **Recognize a page before opening it.** WebKit captures previews sequentially while a dashboard tab is connected, with at least 30 seconds between captures of the same port.
+- **Find servers as they come and go.** Ports 4000–4099 are rescanned automatically. A new scan starts five seconds after the previous one finishes. Only responding web apps appear; the dashboard excludes its own port.
+- **Recognize a page before opening it.** WebKit captures previews sequentially while a dashboard tab is connected, with at least 30 seconds between captures of the same port. Click a thumbnail to inspect the full snapshot; use the separate link to open the app.
 - **See the process behind a port.** The OS adapter adds the listener's name, PID, CPU percentage, and resident memory when available. Missing permissions or tools are shown as unavailable data.
 - **Keep everything on your machine.** The server binds to `127.0.0.1`. There is no account, database, or remote monitoring service.
 - **Keep it ready after login.** Use the macOS LaunchAgent or the Linux package's user service.
@@ -26,8 +26,15 @@ LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps 
 
 <details>
 <summary>See the mobile dashboard</summary>
-<p><img src="docs/screenshots/mobile.png" alt="LocalWebMonitorex mobile dashboard with four local sites" width="375"></p>
+<p><img src="docs/screenshots/mobile.png" alt="LocalWebMonitorex mobile dashboard with six local sites" width="375"></p>
 </details>
+
+<details>
+<summary>See an expanded preview</summary>
+<p><img src="docs/screenshots/expanded.png" alt="Expanded preview of a local project, with an explicit Open app action"></p>
+</details>
+
+On startup, **Overview** is the focus: no port is selected. The dashboard listens on **4100**, scans **4000–4099** by default, and shows a card only when a web server responds. Open a thumbnail to inspect its snapshot, or use its URL to enter the app.
 
 ## Install
 
@@ -137,7 +144,7 @@ flowchart LR
   Previews --> WebKit[Playwright WebKit]
 ```
 
-The HTTP probe checks loopback only, limits timeouts, and does not follow a discovered service's redirect to another host. The scanner checks at most 16 ports concurrently. The macOS/Linux adapter runs one `lsof` and one `ps` command per scan when web services were found; the Windows adapter makes one PowerShell query. The metrics describe the **listener process**, not a port's isolated resource use; a process listening on multiple ports may appear on multiple cards. PowerShell's process CPU property is cumulative time, so the Windows adapter deliberately leaves live CPU percentage unavailable.
+The HTTP probe checks loopback only, allows up to 1.5 seconds for a local response, and does not follow a discovered service's redirect to another host. The scanner checks at most 16 ports concurrently. The macOS/Linux adapter runs one `lsof` and one `ps` command per scan when web services were found; the Windows adapter makes one PowerShell query. The metrics describe the **listener process**, not a port's isolated resource use; a process listening on multiple ports may appear on multiple cards. PowerShell's process CPU property is cumulative time, so the Windows adapter deliberately leaves live CPU percentage unavailable.
 
 Previews are requested only by connected dashboard sessions. Browser navigation and assets are limited to local HTTP(S) addresses. Captures are stored in an OS temporary directory and never committed or uploaded by the app. Login-protected pages and apps that depend on remote assets may show an incomplete initial view.
 

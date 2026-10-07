@@ -25,7 +25,7 @@ defmodule LocalWebMonitorex.PortProbe.Http do
     url = "#{scheme}://127.0.0.1:#{port}/"
 
     case Req.get(url,
-           receive_timeout: 650,
+           receive_timeout: 1_500,
            connect_options: [timeout: 250],
            retry: false,
            redirect: false

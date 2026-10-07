@@ -17,6 +17,46 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
     refute html =~ "Visão geral"
   end
 
+  test "opens a larger preview without leaving the dashboard and closes it when the service stops",
+       %{
+         conn: conn
+       } do
+    service = %Service{port: 4055, status: 200, scheme: "http", title: "Example"}
+    {:ok, view, _html} = live(conn, "/")
+
+    send(view.pid, {:services_updated, %{services: [service], checked_at: nil, scanning: false}})
+    send(view.pid, {:preview_ready, 4055, 123})
+
+    assert render(view) =~ "Example"
+    assert has_element?(view, "button[phx-click=open_preview][phx-value-port='4055']")
+
+    assert render_click(element(view, "button[phx-click=open_preview]")) =~
+             "Full preview of http://localhost:4055"
+
+    assert has_element?(view, "dialog[aria-modal=true]")
+    assert has_element?(view, "dialog a[href='http://localhost:4055']")
+
+    send(view.pid, {:services_updated, %{services: [], checked_at: nil, scanning: false}})
+    refute render(view) =~ "Full preview of http://localhost:4055"
+    refute has_element?(view, "dialog[aria-modal=true]")
+  end
+
+  test "labels filtered results separately from all active ports", %{conn: conn} do
+    services = [
+      %Service{port: 4055, status: 200, scheme: "http", title: "Demo"},
+      %Service{port: 4013, status: 200, scheme: "http", title: "Other"}
+    ]
+
+    {:ok, view, _html} = live(conn, "/")
+    send(view.pid, {:services_updated, %{services: services, checked_at: nil, scanning: false}})
+
+    assert render_change(element(view, "#service-filter"), %{"query" => "405"}) =~
+             "Matches"
+
+    assert has_element?(view, ".service-card", "Demo")
+    refute has_element?(view, ".service-card", "Other")
+  end
+
   test "saves the next dashboard port from settings", %{conn: conn} do
     path =
       Path.join(
@@ -95,6 +135,7 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       query: "",
       scanning: false,
       settings_open: false,
+      selected_service: nil,
       dashboard_port: 4100,
       saved_port: 4100,
       settings_file: "/tmp/localwebmonitorex/port",
@@ -136,6 +177,7 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       query: "",
       scanning: false,
       settings_open: false,
+      selected_service: nil,
       dashboard_port: 4100,
       saved_port: 4100,
       settings_file: "/tmp/localwebmonitorex/port",

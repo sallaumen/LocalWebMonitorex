@@ -25,11 +25,45 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/local_web_monitorex"
 import topbar from "../vendor/topbar"
 
+const PreviewDialog = {
+  mounted() {
+    this.returnFocus = document.activeElement
+    this.onCancel = event => {
+      event.preventDefault()
+      this.pushEvent("close_preview", {})
+    }
+    this.onBackdropClick = event => {
+      const bounds = this.el.getBoundingClientRect()
+      const outside = event.clientX < bounds.left || event.clientX > bounds.right ||
+        event.clientY < bounds.top || event.clientY > bounds.bottom
+      if (event.target === this.el && outside) this.pushEvent("close_preview", {})
+    }
+    this.el.addEventListener("cancel", this.onCancel)
+    this.el.addEventListener("click", this.onBackdropClick)
+    this.el.showModal()
+    this.el.querySelector("[data-preview-close]").focus()
+  },
+  updated() {
+    const image = this.el.querySelector(".preview-frame img")
+    if (image && image.getAttribute("src") !== this.el.dataset.previewSrc) {
+      image.src = this.el.dataset.previewSrc
+    }
+  },
+  destroyed() {
+    requestAnimationFrame(() => {
+      const trigger = document.querySelector(`button[phx-click="open_preview"][phx-value-port="${this.el.dataset.previewPort}"]`)
+      const fallback = document.querySelector("#service-filter input")
+      const focusTarget = trigger || (this.returnFocus?.isConnected ? this.returnFocus : null) || fallback
+      focusTarget?.focus()
+    })
+  },
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, PreviewDialog},
 })
 
 // Show progress bar on live navigation and form submits
