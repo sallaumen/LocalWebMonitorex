@@ -28,4 +28,16 @@ defmodule LocalWebMonitorex.ProcessInspector.WindowsTest do
     assert Windows.snapshot([4005], missing) == %{}
     assert Windows.snapshot([], missing) == %{}
   end
+
+  if match?({:win32, _}, :os.type()) do
+    test "reads a real loopback listener on Windows" do
+      {:ok, socket} = :gen_tcp.listen(0, [:binary, active: false, ip: {127, 0, 0, 1}])
+      on_exit(fn -> :gen_tcp.close(socket) end)
+      {:ok, {_address, port}} = :inet.sockname(socket)
+
+      assert %{^port => process} = Windows.snapshot([port])
+      assert process.pid > 0
+      assert process.memory_bytes > 0
+    end
+  end
 end
