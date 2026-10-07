@@ -7,7 +7,7 @@
 # General application configuration
 import Config
 
-config :local_web_monitorex, monitor_ports: 4000..4100
+config :local_web_monitorex, monitor_ports: 4000..4099
 
 # Configure the endpoint
 config :local_web_monitorex, LocalWebMonitorexWeb.Endpoint,

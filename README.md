@@ -10,7 +10,7 @@
 
 ## Why use it?
 
-- **Find servers as they come and go.** Ports 4000–4100 are checked every 5 seconds by default. Only responding web apps appear; the dashboard excludes its own port.
+- **Find servers as they come and go.** Ports 4000–4099 are checked every 5 seconds by default. Only responding web apps appear; the dashboard excludes its own port.
 - **Recognize a page before opening it.** WebKit captures previews sequentially while a dashboard tab is connected, with at least 30 seconds between captures of the same port.
 - **See the process behind a port.** The OS adapter adds the listener's name, PID, CPU percentage, and resident memory when available. Missing permissions or tools are shown as unavailable data.
 - **Keep everything on your machine.** The server binds to `127.0.0.1`. There is no account, database, or remote monitoring service.
@@ -40,7 +40,7 @@ mix assets.build
 mix phx.server
 ```
 
-Open **[http://localhost:4020](http://localhost:4020)**. Port 4020 is the dashboard default. Port 4000 is an ordinary monitored port, not the dashboard address. Open the URL using `localhost`; the Phoenix LiveView connection uses that host.
+Open **[http://localhost:4100](http://localhost:4100)**. Port 4100 is the dashboard default; ports 4000–4099 are watched. Open the URL using `localhost`; the Phoenix LiveView connection uses that host.
 
 On Windows, use PowerShell after installing Elixir/Erlang, Node.js, and Git:
 
@@ -54,7 +54,7 @@ mix assets.build
 mix phx.server
 ```
 
-The dashboard opens at the same `http://localhost:4020` address. If a screenshot tool is unavailable, the card remains usable and shows a preview placeholder. Automatic login startup is currently provided only for macOS.
+The dashboard opens at the same `http://localhost:4100` address. If a screenshot tool is unavailable, the card remains usable and shows a preview placeholder. Automatic login startup is currently provided only for macOS.
 
 ### Start automatically on macOS
 
@@ -74,20 +74,23 @@ The log is at `~/Library/Logs/LocalWebMonitorex.log`. To stop and remove automat
 ./bin/uninstall-launch-agent
 ```
 
-Uninstalling the LaunchAgent keeps your saved port preference.
+Uninstalling the LaunchAgent keeps your saved preferences.
 
 ## Configuration
 
-Open **Settings** to save a dashboard port from 1024 to 65535. It takes effect on the next process start. The preference contains only a port number. Its default path is `~/.config/localwebmonitorex/port` on macOS/Linux, or `%APPDATA%\LocalWebMonitorex\port` on Windows. Unix users can set `XDG_CONFIG_HOME`; all platforms can set `LOCALWEBMONITOREX_CONFIG` to choose another preference file. The `PORT` environment variable takes priority over the saved value.
+Open **Settings** to change the dashboard port or watched range. Both changes take effect on the next process start. The dashboard port accepts 1024–65535 and defaults to **4100**. The watched range is inclusive, defaults to **4000–4099**, accepts ports 1–65535, and is limited to 1,000 ports per scan. The dashboard always excludes its own port even when it falls inside the watched range.
+
+Preferences are two plain text files: `port` contains one port number, and `range` contains `START-END`. They live in `~/.config/localwebmonitorex/` on macOS/Linux or `%APPDATA%\LocalWebMonitorex\` on Windows. Unix users can set `XDG_CONFIG_HOME`. Set `LOCALWEBMONITOREX_CONFIG` to choose a different port file; the range file defaults to its sibling `range`. Set `LOCALWEBMONITOREX_RANGE_CONFIG` to override that path. The `PORT` environment variable takes priority over the saved dashboard port.
 
 To choose a port before the first start:
 
 ```bash
 mkdir -p ~/.config/localwebmonitorex
 printf '4321\n' > ~/.config/localwebmonitorex/port
+printf '4000-4099\n' > ~/.config/localwebmonitorex/range
 ```
 
-The watched range is `monitor_ports` in [`config/config.exs`](config/config.exs). The dashboard shows the configured range and always excludes its own port from discovery.
+The dashboard shows the active range. Invalid preference contents fall back to the built-in defaults.
 
 ## How it works
 

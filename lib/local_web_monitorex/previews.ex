@@ -88,7 +88,8 @@ defmodule LocalWebMonitorex.Previews do
   end
 
   defp allowed?(port) when is_integer(port) do
-    port in Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4100)
+    port in Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4099) and
+      port != Application.get_env(:local_web_monitorex, :dashboard_port, 4100)
   end
 
   defp allowed?(_port), do: false

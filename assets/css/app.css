@@ -167,10 +167,20 @@ a { color:inherit; text-decoration:none; }
 .settings-input-row input { min-width:0; width:100%; flex:1; border:0; outline:0; color:#263e2e; font:13px "SFMono-Regular",Consolas,monospace; padding:0 5px; }
 .settings-input-row button { align-self:stretch; border:0; background:#20382f; color:#f4f8ea; padding:0 14px; font-size:12px; font-weight:700; }
 .settings-input-row button:hover { background:#335943; }
+.settings-range { border-top:1px solid #d9e1d7; margin-top:38px; padding-top:29px; }
+.settings-range h3 { margin:0 0 8px; font-size:18px; letter-spacing:-.045em; }
+.settings-range > p { margin:0; color:#6d7b70; font-size:12px; line-height:1.5; }
+.settings-range form { margin-top:22px; }
+.settings-range-fields { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:end; gap:12px; }
+.settings-range-fields label { margin-bottom:8px; }
+.settings-range-fields input { width:100%; height:43px; border:1px solid #cbd7c9; border-radius:5px; background:white; color:#263e2e; padding:0 11px; font:13px "SFMono-Regular",Consolas,monospace; }
+.settings-range-fields > span { color:#87948a; padding-bottom:11px; }
+.settings-range-save { width:100%; height:41px; margin-top:13px; border:0; border-radius:5px; background:#20382f; color:#f4f8ea; font-size:12px; font-weight:700; }
+.settings-range-save:hover { background:#335943; }
 .settings-error,.settings-success { margin:11px 0 0; font-size:12px; line-height:1.5; }
 .settings-error { color:#a54334; }
 .settings-success { color:#357344; }
-.settings-note { border-top:1px solid #d9e1d7; margin-top:55px; padding-top:19px; display:flex; align-items:flex-start; gap:10px; color:#738076; font-size:11px; line-height:1.6; }
+.settings-note { border-top:1px solid #d9e1d7; margin-top:36px; padding-top:19px; display:flex; align-items:flex-start; gap:10px; color:#738076; font-size:11px; line-height:1.6; }
 .settings-note .icon { color:#63846a; width:16px; height:16px; margin-top:2px; }
 .settings-note code { font:10px "SFMono-Regular",Consolas,monospace; overflow-wrap:anywhere; color:#45634b; }
 .mobile-brand button { display:none; }

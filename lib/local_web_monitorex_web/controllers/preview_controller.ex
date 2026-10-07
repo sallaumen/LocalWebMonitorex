@@ -5,7 +5,8 @@ defmodule LocalWebMonitorexWeb.PreviewController do
 
   def show(conn, %{"port" => value}) do
     with {port, ""} <- Integer.parse(value),
-         true <- port in Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4100),
+         true <- port in Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4099),
+         true <- port != Application.get_env(:local_web_monitorex, :dashboard_port, 4100),
          {:ok, path, _version} <- Previews.image(port),
          true <- File.regular?(path) do
       conn

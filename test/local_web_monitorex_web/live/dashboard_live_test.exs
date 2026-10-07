@@ -12,6 +12,7 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
     assert html =~ "LocalWebMonitorex"
     assert html =~ "localhost:#{Application.fetch_env!(:local_web_monitorex, :dashboard_port)}"
     assert html =~ "Active ports"
+    assert html =~ "4000–4099"
     refute html =~ "Main port"
     refute html =~ "Visão geral"
   end
@@ -40,6 +41,39 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
     assert File.read!(path) == "4321\n"
   end
 
+  test "saves the next watched range from settings", %{conn: conn} do
+    path =
+      Path.join(
+        System.tmp_dir!(),
+        "localwebmonitorex-range-#{System.unique_integer([:positive])}/range"
+      )
+
+    previous = Application.get_env(:local_web_monitorex, :range_settings_file)
+    Application.put_env(:local_web_monitorex, :range_settings_file, path)
+
+    on_exit(fn ->
+      Application.put_env(:local_web_monitorex, :range_settings_file, previous)
+      File.rm_rf!(Path.dirname(path))
+    end)
+
+    {:ok, view, _html} = live(conn, "/")
+    assert render_click(element(view, "button.rail-button")) =~ "Watched range"
+
+    assert render_submit(element(view, "form[phx-submit=save_range]"), %{
+             "start" => "4050",
+             "end" => "4080"
+           }) =~ "Saved. Restart"
+
+    assert File.read!(path) == "4050-4080\n"
+
+    assert render_submit(element(view, "form[phx-submit=save_range]"), %{
+             "start" => "4080",
+             "end" => "4050"
+           }) =~ "Choose a valid range"
+
+    assert File.read!(path) == "4050-4080\n"
+  end
+
   test "renders a discovered service before its preview is ready" do
     service = %Service{
       port: 4005,
@@ -61,11 +95,16 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       query: "",
       scanning: false,
       settings_open: false,
-      dashboard_port: 4020,
-      saved_port: 4020,
+      dashboard_port: 4100,
+      saved_port: 4100,
       settings_file: "/tmp/localwebmonitorex/port",
       range_start: 4000,
-      range_end: 4100,
+      range_end: 4099,
+      saved_range_start: 4000,
+      saved_range_end: 4099,
+      range_file: "/tmp/localwebmonitorex/range",
+      range_error: nil,
+      range_saved: false,
       port_error: nil,
       port_saved: false
     }
@@ -97,11 +136,16 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       query: "",
       scanning: false,
       settings_open: false,
-      dashboard_port: 4020,
-      saved_port: 4020,
+      dashboard_port: 4100,
+      saved_port: 4100,
       settings_file: "/tmp/localwebmonitorex/port",
       range_start: 4000,
-      range_end: 4100,
+      range_end: 4099,
+      saved_range_start: 4000,
+      saved_range_end: 4099,
+      range_file: "/tmp/localwebmonitorex/range",
+      range_error: nil,
+      range_saved: false,
       port_error: nil,
       port_saved: false
     }
