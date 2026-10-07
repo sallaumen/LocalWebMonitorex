@@ -63,5 +63,5 @@ fi
 launchctl enable "$agent_target"
 launchctl kickstart -k "$agent_target"
 
-echo "LocalWebMonitorex starts at login. Open http://localhost:4020 (or your saved port)."
+echo "LocalWebMonitorex starts at login. Open http://localhost:4100 (or your saved port)."
 echo "Log: $log_file"

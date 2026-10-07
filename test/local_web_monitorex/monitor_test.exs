@@ -6,7 +6,7 @@ defmodule LocalWebMonitorex.MonitorTest do
 
   setup do
     previous = Application.get_env(:local_web_monitorex, :dashboard_port)
-    Application.put_env(:local_web_monitorex, :dashboard_port, 4020)
+    Application.put_env(:local_web_monitorex, :dashboard_port, 4100)
     on_exit(fn -> Application.put_env(:local_web_monitorex, :dashboard_port, previous) end)
   end
 
@@ -21,7 +21,7 @@ defmodule LocalWebMonitorex.MonitorTest do
       end
     end
 
-    def probe(4020), do: raise("dashboard port was scanned")
+    def probe(4100), do: raise("dashboard port was scanned")
   end
 
   defmodule Inspector do
@@ -44,7 +44,7 @@ defmodule LocalWebMonitorex.MonitorTest do
 
   test "excludes the dashboard port from discovery" do
     :ok = Phoenix.PubSub.subscribe(LocalWebMonitorex.PubSub, "services")
-    monitor = start_supervised!({Monitor, name: :excluded_monitor, ports: [4020], probe: Probe})
+    monitor = start_supervised!({Monitor, name: :excluded_monitor, ports: [4100], probe: Probe})
 
     assert_receive {:services_updated, %{services: [], scanning: false, checked_at: %DateTime{}}},
                    2_000

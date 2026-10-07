@@ -23,13 +23,13 @@ defmodule LocalWebMonitorex.Monitor do
 
   @impl true
   def init(opts) do
-    dashboard_port = Application.get_env(:local_web_monitorex, :dashboard_port, 4020)
+    dashboard_port = Application.get_env(:local_web_monitorex, :dashboard_port, 4100)
 
     configured_ports =
       Keyword.get(
         opts,
         :ports,
-        Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4100)
+        Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4099)
       )
 
     state = %{

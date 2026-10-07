@@ -15,17 +15,39 @@ settings_file =
   System.get_env("LOCALWEBMONITOREX_CONFIG") ||
     Path.join([config_home, settings_directory, "port"])
 
+range_settings_file =
+  System.get_env("LOCALWEBMONITOREX_RANGE_CONFIG") ||
+    Path.join(Path.dirname(settings_file), "range")
+
 saved_port =
   case File.read(settings_file) do
     {:ok, value} ->
       case Integer.parse(String.trim(value)) do
         {port, ""} when port in 1024..65_535 -> port
-        _ -> 4020
+        _ -> 4100
       end
 
     {:error, _reason} ->
-      4020
+      4100
   end
+
+if config_env() != :test do
+  watched_ports =
+    with {:ok, value} <- File.read(range_settings_file),
+         [first, last] <- String.split(String.trim(value), "-", parts: 2),
+         {start_port, ""} <- Integer.parse(first),
+         {end_port, ""} <- Integer.parse(last),
+         true <- start_port in 1..65_535,
+         true <- end_port in 1..65_535,
+         true <- start_port <= end_port,
+         true <- end_port - start_port + 1 <= 1000 do
+      start_port..end_port
+    else
+      _ -> 4000..4099
+    end
+
+  config :local_web_monitorex, monitor_ports: watched_ports
+end
 
 port =
   case Integer.parse(System.get_env("PORT", Integer.to_string(saved_port))) do
@@ -33,7 +55,10 @@ port =
     _ -> raise "PORT must be an integer from 1024 to 65535"
   end
 
-config :local_web_monitorex, settings_file: settings_file, dashboard_port: port
+config :local_web_monitorex,
+  settings_file: settings_file,
+  range_settings_file: range_settings_file,
+  dashboard_port: port
 
 config :local_web_monitorex, LocalWebMonitorexWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: port],

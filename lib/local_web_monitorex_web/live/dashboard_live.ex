@@ -19,7 +19,9 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
     snapshot = Monitor.snapshot()
 
     {range_start, range_end} =
-      range_bounds(Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4100))
+      range_bounds(Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4099))
+
+    saved_range = Settings.read_range()
 
     if connected?(socket), do: request_previews(snapshot.services)
 
@@ -32,7 +34,12 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
      |> assign(:port_error, nil)
      |> assign(:port_saved, false)
      |> assign(:settings_file, Settings.path())
-     |> assign(:dashboard_port, Application.get_env(:local_web_monitorex, :dashboard_port, 4020))
+     |> assign(:range_file, Settings.range_path())
+     |> assign(:saved_range_start, saved_range.first)
+     |> assign(:saved_range_end, saved_range.last)
+     |> assign(:range_error, nil)
+     |> assign(:range_saved, false)
+     |> assign(:dashboard_port, Application.get_env(:local_web_monitorex, :dashboard_port, 4100))
      |> assign(:range_start, range_start)
      |> assign(:range_end, range_end)
      |> assign(:previews, preview_versions(snapshot.services))
@@ -77,6 +84,32 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
          socket
          |> assign(:port_error, "Could not save the setting.")
          |> assign(:port_saved, false)}
+    end
+  end
+
+  def handle_event("save_range", %{"start" => first, "end" => last}, socket) do
+    case Settings.save_range(first, last) do
+      :ok ->
+        saved_range = Settings.read_range()
+
+        {:noreply,
+         socket
+         |> assign(:saved_range_start, saved_range.first)
+         |> assign(:saved_range_end, saved_range.last)
+         |> assign(:range_error, nil)
+         |> assign(:range_saved, true)}
+
+      {:error, :invalid_range} ->
+        {:noreply,
+         socket
+         |> assign(:range_error, "Choose a valid range of up to 1,000 ports (1–65535).")
+         |> assign(:range_saved, false)}
+
+      {:error, _reason} ->
+        {:noreply,
+         socket
+         |> assign(:range_error, "Could not save the range.")
+         |> assign(:range_saved, false)}
     end
   end
 
@@ -306,10 +339,10 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
             aria-label="Close settings"
           ><.icon name="hero-x-mark" class="icon" /></button>
         </div>
-        <h2 id="settings-title">Dashboard port</h2>
+        <h2 id="settings-title">Dashboard settings</h2>
         <p>This dashboard is running at <strong>localhost:{@dashboard_port}</strong>.</p>
         <form id="port-settings" phx-submit="save_port">
-          <label for="dashboard-port">Use on next start</label>
+          <label for="dashboard-port">Dashboard port · next start</label>
           <div class="settings-input-row">
             <span>localhost:</span><input
               id="dashboard-port"
@@ -327,8 +360,48 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
             Saved. Restart LocalWebMonitorex to use the new port.
           </p>
         </form>
+        <div class="settings-range">
+          <h3>Watched range</h3>
+          <p>
+            Currently scanning {@range_start}–{@range_end}. Changes apply on next start. The dashboard port is always excluded.
+          </p>
+          <form id="range-settings" phx-submit="save_range">
+            <div class="settings-range-fields">
+              <div>
+                <label for="range-start">From</label>
+                <input
+                  id="range-start"
+                  type="number"
+                  name="start"
+                  value={@saved_range_start}
+                  min="1"
+                  max="65535"
+                  required
+                />
+              </div>
+              <span aria-hidden="true">—</span>
+              <div>
+                <label for="range-end">To</label>
+                <input
+                  id="range-end"
+                  type="number"
+                  name="end"
+                  value={@saved_range_end}
+                  min="1"
+                  max="65535"
+                  required
+                />
+              </div>
+            </div>
+            <button type="submit" class="settings-range-save">Save range</button>
+            <p :if={@range_error} class="settings-error" role="alert">{@range_error}</p>
+            <p :if={@range_saved} class="settings-success" role="status">
+              Saved. Restart LocalWebMonitorex to use the new range.
+            </p>
+          </form>
+        </div>
         <div class="settings-note">
-          <.icon name="hero-document-text" class="icon" /><span>Local preference at<br /><code>{@settings_file}</code></span>
+          <.icon name="hero-document-text" class="icon" /><span>Local preferences<br /><code>{@settings_file}</code><br /><code>{@range_file}</code></span>
         </div>
       </section>
     </div>
@@ -372,6 +445,6 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
     if value == trunc(value), do: Integer.to_string(trunc(value)), else: format_decimal(value)
   end
 
-  defp range_bounds([]), do: {4000, 4100}
+  defp range_bounds([]), do: {4000, 4099}
   defp range_bounds(ports), do: {Enum.min(ports), Enum.max(ports)}
 end
