@@ -264,7 +264,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
                     <span>PID {service.process.pid}</span>
                   </div>
                   <div class="process-metric">
-                    <small>CPU</small><strong>{format_cpu(service.process.cpu_percent)}%</strong>
+                    <small>CPU</small><strong>{format_cpu(service.process.cpu_percent)}</strong>
                   </div>
                   <div class="process-metric">
                     <small>MEMORY</small><strong>{format_memory(service.process.memory_bytes)} MiB</strong>
@@ -362,11 +362,14 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   defp status_class(status) when status < 400, do: "status-pill ok"
   defp status_class(_status), do: "status-pill warning"
 
-  defp format_cpu(value), do: :erlang.float_to_binary(value, decimals: 1)
+  defp format_cpu(nil), do: "—"
+  defp format_cpu(value), do: "#{format_decimal(value)}%"
+
+  defp format_decimal(value), do: :erlang.float_to_binary(value, decimals: 1)
 
   defp format_memory(bytes) do
     value = Float.round(bytes / 1_048_576, 1)
-    if value == trunc(value), do: Integer.to_string(trunc(value)), else: format_cpu(value)
+    if value == trunc(value), do: Integer.to_string(trunc(value)), else: format_decimal(value)
   end
 
   defp range_bounds([]), do: {4000, 4100}

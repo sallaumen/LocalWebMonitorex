@@ -35,7 +35,7 @@ defmodule LocalWebMonitorex.Monitor do
     state = %{
       ports: Enum.reject(configured_ports, &(&1 == dashboard_port)),
       probe: Keyword.get(opts, :probe, LocalWebMonitorex.PortProbe.Http),
-      inspector: Keyword.get(opts, :inspector, LocalWebMonitorex.ProcessInspector.Lsof),
+      inspector: Keyword.get(opts, :inspector, LocalWebMonitorex.ProcessInspector.System),
       interval: Keyword.get(opts, :interval, 5_000),
       services: [],
       checked_at: nil,

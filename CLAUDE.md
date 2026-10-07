@@ -15,7 +15,7 @@ These rules carry the applicable general quality standards from Forrozin. Its do
 
 ## Boundaries
 
-- `PortProbe` and `ProcessInspector` are swappable discovery boundaries. `Scanner` owns bounded concurrency; `Monitor` owns scheduling and broadcasts; `Previews` owns screenshot work. LiveViews call those public APIs.
+- `PortProbe` and `ProcessInspector` are swappable discovery boundaries. `ProcessInspector.System` selects the macOS, Linux, or Windows adapter. `Scanner` owns bounded concurrency; `Monitor` owns scheduling and broadcasts; `Previews` owns screenshot work. LiveViews call those public APIs.
 - Never scan outside the configured range, except a browser screenshot's local asset requests. The dashboard port excludes itself from discovery.
 - Keep the Phoenix endpoint bound to `127.0.0.1`; preview navigation may use only local HTTP(S) addresses.
 - The preference file contains only the dashboard port. Validate before writing and apply it on the next start.

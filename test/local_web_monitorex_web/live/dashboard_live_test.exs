@@ -77,4 +77,40 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
     assert html =~ "1.5%"
     assert html =~ "50 MiB"
   end
+
+  test "shows unavailable CPU data without losing Windows process details" do
+    service = %Service{
+      port: 4005,
+      status: 200,
+      scheme: "http",
+      process: %LocalWebMonitorex.ProcessInfo{
+        pid: 42,
+        name: "node",
+        cpu_percent: nil,
+        memory_bytes: 52_428_800
+      }
+    }
+
+    assigns = %{
+      services: [service],
+      previews: %{},
+      query: "",
+      scanning: false,
+      settings_open: false,
+      dashboard_port: 4020,
+      saved_port: 4020,
+      settings_file: "/tmp/localwebmonitorex/port",
+      range_start: 4000,
+      range_end: 4100,
+      port_error: nil,
+      port_saved: false
+    }
+
+    html = render_component(&DashboardLive.render/1, assigns)
+
+    assert html =~ "PID 42"
+    assert html =~ "50 MiB"
+    assert html =~ "CPU"
+    assert html =~ "—"
+  end
 end

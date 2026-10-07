@@ -4,11 +4,7 @@ defmodule LocalWebMonitorex.Settings do
   @default_port 4020
 
   @spec path() :: String.t()
-  def path do
-    Application.get_env(:local_web_monitorex, :settings_file) ||
-      System.get_env("LOCALWEBMONITOREX_CONFIG") ||
-      Path.join(config_home(), "localwebmonitorex/port")
-  end
+  def path, do: Application.fetch_env!(:local_web_monitorex, :settings_file)
 
   @spec read_port(String.t()) :: pos_integer()
   def read_port(path \\ path()) do
@@ -29,10 +25,6 @@ defmodule LocalWebMonitorex.Settings do
 
   @spec default_port() :: pos_integer()
   def default_port, do: @default_port
-
-  defp config_home do
-    System.get_env("XDG_CONFIG_HOME") || Path.join(System.user_home!(), ".config")
-  end
 
   defp parse_port(value) when is_integer(value) and value in 1024..65_535, do: {:ok, value}
 

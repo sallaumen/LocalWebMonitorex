@@ -1,10 +1,19 @@
 import Config
 
-config_home = System.get_env("XDG_CONFIG_HOME") || Path.join(System.user_home!(), ".config")
+windows? = match?({:win32, _}, :os.type())
+
+config_home =
+  if windows? do
+    System.get_env("APPDATA") || Path.join(System.user_home!(), "AppData/Roaming")
+  else
+    System.get_env("XDG_CONFIG_HOME") || Path.join(System.user_home!(), ".config")
+  end
+
+settings_directory = if windows?, do: "LocalWebMonitorex", else: "localwebmonitorex"
 
 settings_file =
   System.get_env("LOCALWEBMONITOREX_CONFIG") ||
-    Path.join(config_home, "localwebmonitorex/port")
+    Path.join([config_home, settings_directory, "port"])
 
 saved_port =
   case File.read(settings_file) do
