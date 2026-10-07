@@ -62,7 +62,7 @@ The dashboard opens at the same `http://localhost:4100` address. If a screenshot
 ./bin/install-launch-agent
 ```
 
-The installer prepares production assets, installs a user LaunchAgent, and starts the app. It runs again at login. To restart it after saving a new dashboard port in **Settings**:
+The installer copies the app to `~/Library/Application Support/LocalWebMonitorex`, prepares production assets there, installs a user LaunchAgent, and starts it. This lets the background process run outside protected project folders such as Documents. It starts again at login. Re-run the installer after pulling project updates. To restart it after saving a new port or watched range in **Settings**:
 
 ```bash
 launchctl kickstart -k gui/$(id -u)/com.localwebmonitorex
@@ -74,7 +74,7 @@ The log is at `~/Library/Logs/LocalWebMonitorex.log`. To stop and remove automat
 ./bin/uninstall-launch-agent
 ```
 
-Uninstalling the LaunchAgent keeps your saved preferences.
+Removing the LaunchAgent keeps the installed copy and your saved preferences.
 
 ## Configuration
 

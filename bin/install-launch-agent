@@ -7,18 +7,24 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+install_dir="$HOME/Library/Application Support/LocalWebMonitorex"
 agent_label="com.localwebmonitorex"
 agent_file="$HOME/Library/LaunchAgents/$agent_label.plist"
 log_file="$HOME/Library/Logs/LocalWebMonitorex.log"
 
-cd "$project_dir"
+mkdir -p "$install_dir"
+if [[ "$project_dir" != "$install_dir" ]]; then
+  rsync -a --delete --exclude '/.git/' --exclude '/_build/' "$project_dir/" "$install_dir/"
+fi
+
+cd "$install_dir"
 mix deps.get
 npm ci --prefix assets
 ./assets/node_modules/.bin/playwright install webkit
 MIX_ENV=prod mix assets.deploy
 
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
-PROJECT_DIR="$project_dir" AGENT_FILE="$agent_file" LOG_FILE="$log_file" python3 - <<'PY'
+PROJECT_DIR="$install_dir" AGENT_FILE="$agent_file" LOG_FILE="$log_file" python3 - <<'PY'
 import os
 import plistlib
 import shutil
@@ -64,4 +70,5 @@ launchctl enable "$agent_target"
 launchctl kickstart -k "$agent_target"
 
 echo "LocalWebMonitorex starts at login. Open http://localhost:4100 (or your saved port)."
+echo "Installed at: $install_dir"
 echo "Log: $log_file"
