@@ -27,7 +27,7 @@ mix = shutil.which("mix")
 asdf = shutil.which("asdf")
 node = shutil.which("node")
 runtime_dirs = [os.path.dirname(tool) for tool in (mix, asdf, node) if tool]
-runtime_dirs += ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+runtime_dirs += ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
 runtime_path = os.pathsep.join(dict.fromkeys(runtime_dirs))
 
 config = {
@@ -47,7 +47,19 @@ PY
 
 agent_target="gui/$(id -u)/$agent_label"
 launchctl bootout "$agent_target" >/dev/null 2>&1 || true
-launchctl bootstrap "gui/$(id -u)" "$agent_file"
+bootstrap_error=""
+registered=false
+for attempt in 1 2 3 4 5; do
+  if bootstrap_error="$(launchctl bootstrap "gui/$(id -u)" "$agent_file" 2>&1)"; then
+    registered=true
+    break
+  fi
+  sleep 1
+done
+if [[ "$registered" != true ]]; then
+  echo "$bootstrap_error" >&2
+  exit 1
+fi
 launchctl enable "$agent_target"
 launchctl kickstart -k "$agent_target"
 

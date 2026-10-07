@@ -2,7 +2,7 @@ defmodule LocalWebMonitorex.Service do
   @moduledoc "A web service discovered on a local port."
 
   @enforce_keys [:port, :scheme, :status]
-  defstruct [:port, :scheme, :status, :title, :content_type, :response_ms]
+  defstruct [:port, :scheme, :status, :title, :content_type, :response_ms, :process]
 
   @type t :: %__MODULE__{
           port: pos_integer(),
@@ -10,7 +10,8 @@ defmodule LocalWebMonitorex.Service do
           status: pos_integer(),
           title: String.t() | nil,
           content_type: String.t() | nil,
-          response_ms: non_neg_integer() | nil
+          response_ms: non_neg_integer() | nil,
+          process: LocalWebMonitorex.ProcessInfo.t() | nil
         }
 
   @spec url(t()) :: String.t()

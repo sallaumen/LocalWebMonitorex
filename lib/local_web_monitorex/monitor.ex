@@ -4,6 +4,7 @@ defmodule LocalWebMonitorex.Monitor do
   use GenServer
 
   alias LocalWebMonitorex.Scanner
+  alias LocalWebMonitorex.ProcessInspector
 
   @topic "services"
 
@@ -34,6 +35,7 @@ defmodule LocalWebMonitorex.Monitor do
     state = %{
       ports: Enum.reject(configured_ports, &(&1 == dashboard_port)),
       probe: Keyword.get(opts, :probe, LocalWebMonitorex.PortProbe.Http),
+      inspector: Keyword.get(opts, :inspector, LocalWebMonitorex.ProcessInspector.Lsof),
       interval: Keyword.get(opts, :interval, 5_000),
       services: [],
       checked_at: nil,
@@ -61,7 +63,9 @@ defmodule LocalWebMonitorex.Monitor do
   def handle_info(:scan, state) do
     task =
       Task.Supervisor.async_nolink(LocalWebMonitorex.TaskSupervisor, fn ->
-        Scanner.scan(state.ports, state.probe)
+        state.ports
+        |> Scanner.scan(state.probe)
+        |> ProcessInspector.enrich(state.inspector)
       end)
 
     updated = %{state | scanning: true, task_ref: task.ref}

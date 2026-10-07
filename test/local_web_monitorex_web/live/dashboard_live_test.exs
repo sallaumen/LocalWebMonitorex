@@ -6,12 +6,14 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
   alias LocalWebMonitorex.Service
   alias LocalWebMonitorexWeb.DashboardLive
 
-  test "shows the dashboard and permanent shortcut to port 4000", %{conn: conn} do
+  test "shows the dashboard address and English interface", %{conn: conn} do
     {:ok, _view, html} = live(conn, "/")
 
     assert html =~ "LocalWebMonitorex"
-    assert html =~ "http://localhost:4000"
-    assert html =~ "Portas ativas"
+    assert html =~ "localhost:#{Application.fetch_env!(:local_web_monitorex, :dashboard_port)}"
+    assert html =~ "Active ports"
+    refute html =~ "Main port"
+    refute html =~ "Visão geral"
   end
 
   test "saves the next dashboard port from settings", %{conn: conn} do
@@ -30,16 +32,28 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
     end)
 
     {:ok, view, _html} = live(conn, "/")
-    assert render_click(element(view, "button.rail-button")) =~ "Porta do painel"
+    assert render_click(element(view, "button.rail-button")) =~ "Dashboard port"
 
     assert render_submit(element(view, "form[phx-submit=save_port]"), %{"port" => "4321"}) =~
-             "Salvo. Reinicie"
+             "Saved. Restart"
 
     assert File.read!(path) == "4321\n"
   end
 
   test "renders a discovered service before its preview is ready" do
-    service = %Service{port: 4005, status: 200, scheme: "http", title: "Example", response_ms: 12}
+    service = %Service{
+      port: 4005,
+      status: 200,
+      scheme: "http",
+      title: "Example",
+      response_ms: 12,
+      process: %LocalWebMonitorex.ProcessInfo{
+        pid: 42,
+        name: "node",
+        cpu_percent: 1.5,
+        memory_bytes: 52_428_800
+      }
+    }
 
     assigns = %{
       services: [service],
@@ -56,6 +70,11 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       port_saved: false
     }
 
-    assert render_component(&DashboardLive.render/1, assigns) =~ "Example"
+    html = render_component(&DashboardLive.render/1, assigns)
+
+    assert html =~ "Example"
+    assert html =~ "PID 42"
+    assert html =~ "1.5%"
+    assert html =~ "50 MiB"
   end
 end

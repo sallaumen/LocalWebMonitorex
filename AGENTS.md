@@ -4,10 +4,11 @@ Read `CLAUDE.md` before changing the application. This is a local Phoenix LiveVi
 
 ## Quality
 
-- Keep code, modules, atoms, events, tests and comments in English. Keep interface copy in Portuguese.
+- Keep code, modules, atoms, events, tests, comments and interface copy in English.
 - Use TDD for behavior changes. Name tests by behavior, assert observable outcomes, and avoid skipped tests.
 - Keep functions focused and short. Separate pure calculations from I/O. Prefer pattern-matched clauses and explicit return contracts.
 - Give public domain functions specs. Inject port probing through the `PortProbe` behavior.
+- Collect optional process metrics through the `ProcessInspector` behavior. Keep process commands bounded to one `lsof` and one `ps` call per scan, and show unavailable data honestly.
 - Use `Req` for HTTP requests. Bound concurrency and timeouts, and do not follow a discovered service's redirect to a remote host.
 - Keep screenshots sequential and local. Do not commit captures of applications running on a contributor's computer.
 - Validate incrementally: focused tests, affected tests, then the full suite for shared infrastructure. Run `mix format --check-formatted` and `mix compile --warnings-as-errors` before a pull request.
