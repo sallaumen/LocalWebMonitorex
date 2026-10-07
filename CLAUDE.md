@@ -6,7 +6,7 @@ These rules carry the applicable general quality standards from Forrozin. Its do
 
 ## Code and behavior
 
-- Code identifiers and test names are in English; user-visible text is in Portuguese.
+- Code identifiers, test names and user-visible text are in English.
 - Write a failing behavior test before each feature or bug fix. Test the public result, not an implementation detail.
 - Keep functions usually within 10 lines and extract a named step before a function becomes difficult to scan. Keep calculations pure and I/O at the edge.
 - Prefer multiple clauses for distinct states, `case` for one decision and `with` for a short chain of fallible operations.
@@ -15,7 +15,7 @@ These rules carry the applicable general quality standards from Forrozin. Its do
 
 ## Boundaries
 
-- `PortProbe` is the swappable discovery boundary. `Scanner` owns bounded concurrency; `Monitor` owns scheduling and broadcasts; `Previews` owns screenshot work. LiveViews call those public APIs.
+- `PortProbe` and `ProcessInspector` are swappable discovery boundaries. `Scanner` owns bounded concurrency; `Monitor` owns scheduling and broadcasts; `Previews` owns screenshot work. LiveViews call those public APIs.
 - Never scan outside the configured range, except a browser screenshot's local asset requests. The dashboard port excludes itself from discovery.
 - Keep the Phoenix endpoint bound to `127.0.0.1`; preview navigation may use only local HTTP(S) addresses.
 - The preference file contains only the dashboard port. Validate before writing and apply it on the next start.

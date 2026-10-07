@@ -25,7 +25,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
 
     {:ok,
      socket
-     |> assign(:page_title, "LocalWebMonitorex · Visão geral")
+     |> assign(:page_title, "LocalWebMonitorex · Overview")
      |> assign(:query, "")
      |> assign(:settings_open, false)
      |> assign(:saved_port, Settings.read_port())
@@ -69,13 +69,13 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
       {:error, :invalid_port} ->
         {:noreply,
          socket
-         |> assign(:port_error, "Use uma porta entre 1024 e 65535.")
+         |> assign(:port_error, "Choose a port between 1024 and 65535.")
          |> assign(:port_saved, false)}
 
       {:error, _reason} ->
         {:noreply,
          socket
-         |> assign(:port_error, "Não foi possível salvar a configuração.")
+         |> assign(:port_error, "Could not save the setting.")
          |> assign(:port_saved, false)}
     end
   end
@@ -104,35 +104,35 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   def render(assigns) do
     ~H"""
     <div class="app-shell">
-      <aside class="sidebar" aria-label="Navegação principal">
-        <a class="brand" href="/" aria-label="LocalWebMonitorex, visão geral">
+      <aside class="sidebar" aria-label="Main navigation">
+        <a class="brand" href="/" aria-label="LocalWebMonitorex overview">
           <span class="brand-mark" aria-hidden="true"><span></span></span>
           <span class="brand-word">LocalWeb<span class="brand-sub">Monitorex<span class="brand-period">.</span></span></span>
         </a>
 
         <div class="sidebar-middle">
-          <p class="rail-label">PAINEL LOCAL</p>
+          <p class="rail-label">LOCAL DASHBOARD</p>
           <div class="rail-item active">
-            <.icon name="hero-squares-2x2" class="icon" /> Visão geral
+            <.icon name="hero-squares-2x2" class="icon" /> Overview
           </div>
           <button type="button" class="rail-item rail-button" phx-click="open_settings">
-            <.icon name="hero-cog-6-tooth" class="icon" /> Configurações
+            <.icon name="hero-cog-6-tooth" class="icon" /> Settings
           </button>
           <div class="rail-divider"></div>
-          <p class="rail-label">FAIXA OBSERVADA</p>
+          <p class="rail-label">WATCHED PORTS</p>
           <div class="range-display">
             <span>{@range_start}</span><span class="range-line"></span><span>{@range_end}</span>
           </div>
-          <p class="rail-caption">127.0.0.1 · painel excluído</p>
+          <p class="rail-caption">127.0.0.1 · dashboard excluded</p>
         </div>
 
-        <a class="quick-link" href="http://localhost:4000" target="_blank" rel="noopener noreferrer">
-          <span class="quick-link-head"><.icon name="hero-bolt" class="icon" /> ACESSO RÁPIDO</span>
-          <strong>localhost:4000</strong>
-          <span class="quick-link-foot">Abrir porta principal
-          <.icon name="hero-arrow-up-right" class="icon" /></span>
-        </a>
-        <p class="rail-footer">LOCALWEBMONITOREX · 2026</p>
+        <div class="quick-link" aria-label="Dashboard address">
+          <span class="quick-link-head"><.icon name="hero-command-line" class="icon" />
+          DASHBOARD ADDRESS</span>
+          <strong>localhost:{@dashboard_port}</strong>
+          <span class="quick-link-foot">Running here <span class="quick-link-live">● LIVE</span></span>
+        </div>
+        <p class="rail-footer">LOCALWEBMONITOREX · OPEN SOURCE</p>
       </aside>
 
       <main class="workspace">
@@ -140,49 +140,45 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
           <span class="brand-mark" aria-hidden="true"><span></span></span><strong>LocalWebMonitorex<span class="brand-period">.</span></strong><button
             type="button"
             phx-click="open_settings"
-            aria-label="Configurações"
+            aria-label="Settings"
           ><.icon name="hero-cog-6-tooth" class="icon" /></button>
         </div>
         <header class="page-head">
           <div>
-            <div class="eyebrow"><span class="eyebrow-line"></span> SEU AMBIENTE, NUMA TELA</div>
-            <h1>Visão geral</h1>
-            <p>Os serviços web que estão rodando agora na sua máquina.</p>
+            <div class="eyebrow"><span class="eyebrow-line"></span> YOUR MACHINE, IN VIEW</div>
+            <h1>Overview</h1>
+            <p>Web services currently running on this machine.</p>
           </div>
           <div class="head-actions">
             <div class="scan-status" aria-live="polite">
               <span class={if @scanning, do: "pulse-dot scanning", else: "pulse-dot"}></span>
-              <span>{if @scanning, do: "Verificando portas", else: "Monitorando"}</span>
+              <span>{if @scanning, do: "Scanning ports", else: "Watching"}</span>
             </div>
             <button type="button" class="refresh-button" phx-click="scan" disabled={@scanning}>
-              <.icon name="hero-arrow-path" class="icon" /> Atualizar
+              <.icon name="hero-arrow-path" class="icon" /> Refresh
             </button>
             <button
               type="button"
               class="settings-shortcut"
               phx-click="open_settings"
-              aria-label="Configurações"
+              aria-label="Settings"
             ><.icon name="hero-cog-6-tooth" class="icon" /></button>
           </div>
-          <a
-            class="mobile-quick-link"
-            href="http://localhost:4000"
-            target="_blank"
-            rel="noopener noreferrer"
-          ><.icon name="hero-bolt" class="icon" /> Abrir localhost:4000
-          <.icon name="hero-arrow-up-right" class="icon" /></a>
+          <div class="mobile-quick-link">
+            <.icon name="hero-command-line" class="icon" /> Dashboard at localhost:{@dashboard_port}
+          </div>
         </header>
 
-        <section class="overview" aria-label="Resumo">
+        <section class="overview" aria-label="Summary">
           <div class="overview-count">
             <span class="overview-number">{length(@services)}</span>
-            <span class="overview-copy"><strong>Portas ativas</strong><small>na faixa {@range_start}–{@range_end}</small></span>
+            <span class="overview-copy"><strong>Active ports</strong><small>in range {@range_start}–{@range_end}</small></span>
           </div>
           <div class="overview-side">
             <div class="overview-rule"></div>
             <span class="overview-icon"><.icon name="hero-signal" class="icon" /></span>
             <div>
-              <strong>Varredura automática</strong><small>A cada 5 segundos · prévias a cada 30 segundos</small>
+              <strong>Automatic scan</strong><small>Every 5 seconds · previews every 30 seconds</small>
             </div>
           </div>
           <span class="overview-corner" aria-hidden="true">F / 01</span>
@@ -191,8 +187,8 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
         <section class="services-section" aria-labelledby="services-title">
           <div class="section-head">
             <div>
-              <p class="section-index">01 / PORTAS ENCONTRADAS</p>
-              <h2 id="services-title">Em funcionamento <span>{length(@services)}</span></h2>
+              <p class="section-index">01 / DISCOVERED PORTS</p>
+              <h2 id="services-title">Live now <span>{length(@services)}</span></h2>
             </div>
             <form id="service-filter" phx-change="filter" role="search" class="search-form">
               <.icon name="hero-magnifying-glass" class="icon" />
@@ -200,8 +196,8 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
                 type="search"
                 name="query"
                 value={@query}
-                placeholder="Filtrar porta ou nome"
-                aria-label="Filtrar porta ou nome"
+                placeholder="Filter by port or name"
+                aria-label="Filter by port or name"
                 autocomplete="off"
               />
               <span class="search-shortcut" aria-hidden="true">⌕</span>
@@ -212,22 +208,22 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
             <div class="empty-graphic" aria-hidden="true">
               <span class="empty-ring"></span><span class="empty-cross">+</span>
             </div>
-            <p class="empty-kicker">SEM SINAL POR ENQUANTO</p>
-            <h3>Nenhuma aplicação encontrada.</h3>
+            <p class="empty-kicker">NO SIGNAL YET</p>
+            <h3>No web apps found.</h3>
             <p>
-              Assim que um servidor abrir entre as portas {@range_start} e {@range_end}, ele aparece aqui.
+              A web server on ports {@range_start}–{@range_end} will appear here automatically.
             </p>
             <button type="button" phx-click="scan" disabled={@scanning}><.icon
               name="hero-arrow-path"
               class="icon"
-            /> Verificar agora</button>
+            /> Scan now</button>
           </div>
 
           <div
             :if={@services != [] and filtered_services(@services, @query) == []}
             class="filter-empty"
           >
-            Nenhuma porta corresponde a “{@query}”.
+            No ports match “{@query}”.
           </div>
 
           <div :if={@services != []} class="service-grid">
@@ -237,27 +233,45 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
                 href={Service.url(service)}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={"Abrir #{Service.url(service)}"}
+                aria-label={"Open #{Service.url(service)}"}
               >
                 <img
                   :if={@previews[service.port]}
                   src={~p"/previews/#{service.port}?v=#{@previews[service.port]}"}
-                  alt={"Prévia de #{Service.url(service)}"}
+                  alt={"Preview of #{Service.url(service)}"}
                   loading="lazy"
                 />
                 <div :if={is_nil(@previews[service.port])} class="camera-placeholder">
-                  <span class="camera-cross">+</span><span class="camera-port">{service.port}</span><span class="camera-wait">CAPTURANDO PRÉVIA</span>
+                  <span class="camera-cross">+</span><span class="camera-port">{service.port}</span><span class="camera-wait">CAPTURING PREVIEW</span>
                 </div>
                 <div class="camera-top">
-                  <span><span class="camera-led"></span> PORTA {service.port}</span><span>CAPTURA</span>
+                  <span><span class="camera-led"></span> PORT {service.port}</span><span>PREVIEW</span>
                 </div>
                 <div class="camera-open"><.icon name="hero-arrow-up-right" class="icon" /></div>
               </a>
               <div class="card-content">
                 <div class="card-title-row">
-                  <h3>{service.title || "Aplicação local"}</h3><span class={
-                    status_class(service.status)
-                  }>{service.status}</span>
+                  <h3>{service.title || "Local app"}</h3><span class={status_class(service.status)}>{service.status}</span>
+                </div>
+                <div
+                  :if={service.process}
+                  class="process-metrics"
+                  aria-label={"Process #{service.process.pid} metrics"}
+                >
+                  <div class="process-identity">
+                    <small>PROCESS</small>
+                    <strong title={service.process.name}>{service.process.name}</strong>
+                    <span>PID {service.process.pid}</span>
+                  </div>
+                  <div class="process-metric">
+                    <small>CPU</small><strong>{format_cpu(service.process.cpu_percent)}%</strong>
+                  </div>
+                  <div class="process-metric">
+                    <small>MEMORY</small><strong>{format_memory(service.process.memory_bytes)} MiB</strong>
+                  </div>
+                </div>
+                <div :if={is_nil(service.process)} class="process-unavailable">
+                  Process metrics unavailable
                 </div>
                 <div class="card-bottom">
                   <a href={Service.url(service)} target="_blank" rel="noopener noreferrer">{Service.url(
@@ -270,7 +284,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
         </section>
 
         <footer class="page-footer">
-          <span>LOCALWEBMONITOREX · MONITOR LOCAL</span><span>Somente nesta máquina
+          <span>LOCALWEBMONITOREX · LOCAL MONITOR</span><span>Only on this machine
           <span class="footer-separator">/</span>
           127.0.0.1</span>
         </footer>
@@ -286,16 +300,16 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
         phx-key="Escape"
       >
         <div class="settings-head">
-          <span>CONFIGURAÇÕES</span><button
+          <span>SETTINGS</span><button
             type="button"
             phx-click="close_settings"
-            aria-label="Fechar configurações"
+            aria-label="Close settings"
           ><.icon name="hero-x-mark" class="icon" /></button>
         </div>
-        <h2 id="settings-title">Porta do painel</h2>
-        <p>O painel está em <strong>localhost:{@dashboard_port}</strong>.</p>
+        <h2 id="settings-title">Dashboard port</h2>
+        <p>This dashboard is running at <strong>localhost:{@dashboard_port}</strong>.</p>
         <form id="port-settings" phx-submit="save_port">
-          <label for="dashboard-port">Usar no próximo início</label>
+          <label for="dashboard-port">Use on next start</label>
           <div class="settings-input-row">
             <span>localhost:</span><input
               id="dashboard-port"
@@ -306,15 +320,15 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
               max="65535"
               required
               autofocus
-            /><button type="submit">Salvar</button>
+            /><button type="submit">Save</button>
           </div>
           <p :if={@port_error} class="settings-error" role="alert">{@port_error}</p>
           <p :if={@port_saved} class="settings-success" role="status">
-            Salvo. Reinicie o LocalWebMonitorex para usar a nova porta.
+            Saved. Restart LocalWebMonitorex to use the new port.
           </p>
         </form>
         <div class="settings-note">
-          <.icon name="hero-document-text" class="icon" /><span>Preferência local em<br /><code>{@settings_file}</code></span>
+          <.icon name="hero-document-text" class="icon" /><span>Local preference at<br /><code>{@settings_file}</code></span>
         </div>
       </section>
     </div>
@@ -347,6 +361,13 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
 
   defp status_class(status) when status < 400, do: "status-pill ok"
   defp status_class(_status), do: "status-pill warning"
+
+  defp format_cpu(value), do: :erlang.float_to_binary(value, decimals: 1)
+
+  defp format_memory(bytes) do
+    value = Float.round(bytes / 1_048_576, 1)
+    if value == trunc(value), do: Integer.to_string(trunc(value)), else: format_cpu(value)
+  end
 
   defp range_bounds([]), do: {4000, 4100}
   defp range_bounds(ports), do: {Enum.min(ports), Enum.max(ports)}
