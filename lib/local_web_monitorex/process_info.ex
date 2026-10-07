@@ -7,7 +7,7 @@ defmodule LocalWebMonitorex.ProcessInfo do
   @type t :: %__MODULE__{
           pid: pos_integer(),
           name: String.t(),
-          cpu_percent: float(),
+          cpu_percent: float() | nil,
           memory_bytes: non_neg_integer()
         }
 end

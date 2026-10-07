@@ -38,3 +38,23 @@ jobs:
       - run: mix deps.get
       - run: npm ci --prefix assets
       - run: MIX_ENV=prod mix assets.deploy
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3"
+          elixir-version: "1.19.5-otp-27"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - run: mix deps.get
+      - run: npm ci --prefix assets
+      - run: mix format --check-formatted
+      - run: mix test
+      - run: mix compile --warnings-as-errors
+      - run: mix assets.deploy
+        env:
+          MIX_ENV: prod

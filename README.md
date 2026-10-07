@@ -12,15 +12,23 @@
 
 - **Find servers as they come and go.** Ports 4000–4100 are checked every 5 seconds by default. Only responding web apps appear; the dashboard excludes its own port.
 - **Recognize a page before opening it.** WebKit captures previews sequentially while a dashboard tab is connected, with at least 30 seconds between captures of the same port.
-- **See the process behind a port.** On systems with `lsof` and `ps`, cards show the listener's executable, PID, CPU percentage, and resident memory. Missing permissions or tools are shown as unavailable data.
+- **See the process behind a port.** The OS adapter adds the listener's name, PID, CPU percentage, and resident memory when available. Missing permissions or tools are shown as unavailable data.
 - **Keep everything on your machine.** The server binds to `127.0.0.1`. There is no account, database, or remote monitoring service.
 - **Start with your Mac.** A user LaunchAgent can build the app and start it at login.
+
+| Platform | Dashboard and previews | Process details | Login startup |
+| --- | --- | --- | --- |
+| macOS | Supported | PID, CPU, memory via `lsof` and `ps` | LaunchAgent installer |
+| Linux | Supported | PID, CPU, memory when `lsof` and `ps` are installed | Manual setup |
+| Windows | Supported through PowerShell | PID and memory through `Get-NetTCPConnection` and `Get-Process`; CPU shown as unavailable | Manual setup |
 
 ![LocalWebMonitorex mobile dashboard showing sample apps](docs/screenshots/mobile.png)
 
 ## Quick start
 
-You need Elixir 1.15+ with a compatible Erlang/OTP version, Node.js 20+, npm, and Playwright WebKit. On macOS, `lsof` and `ps` are already available. They are optional on other systems; service discovery still works without process metrics.
+You need Elixir 1.15+ with a compatible Erlang/OTP version, Node.js 20+, npm, and Playwright WebKit. The process tools are optional; service discovery still works without process metrics. See the official [Elixir installation guide](https://elixir-lang.org/install/) and [Playwright browser guide](https://playwright.dev/docs/browsers) for platform prerequisites.
+
+On macOS or Linux:
 
 ```bash
 git clone https://github.com/sallaumen/LocalWebMonitorex.git
@@ -33,6 +41,20 @@ mix phx.server
 ```
 
 Open **[http://localhost:4020](http://localhost:4020)**. Port 4020 is the dashboard default. Port 4000 is an ordinary monitored port, not the dashboard address. Open the URL using `localhost`; the Phoenix LiveView connection uses that host.
+
+On Windows, use PowerShell after installing Elixir/Erlang, Node.js, and Git:
+
+```powershell
+git clone https://github.com/sallaumen/LocalWebMonitorex.git
+Set-Location LocalWebMonitorex
+mix deps.get
+npm ci --prefix assets
+.\assets\node_modules\.bin\playwright.cmd install webkit
+mix assets.build
+mix phx.server
+```
+
+The dashboard opens at the same `http://localhost:4020` address. If a screenshot tool is unavailable, the card remains usable and shows a preview placeholder. Automatic login startup is currently provided only for macOS.
 
 ### Start automatically on macOS
 
@@ -56,7 +78,7 @@ Uninstalling the LaunchAgent keeps your saved port preference.
 
 ## Configuration
 
-Open **Settings** to save a dashboard port from 1024 to 65535. It takes effect on the next process start. The preference contains only a port number and lives at `~/.config/localwebmonitorex/port`, or under `$XDG_CONFIG_HOME/localwebmonitorex/port`. Set `LOCALWEBMONITOREX_CONFIG` to choose another preference file. The `PORT` environment variable takes priority over the saved value.
+Open **Settings** to save a dashboard port from 1024 to 65535. It takes effect on the next process start. The preference contains only a port number. Its default path is `~/.config/localwebmonitorex/port` on macOS/Linux, or `%APPDATA%\LocalWebMonitorex\port` on Windows. Unix users can set `XDG_CONFIG_HOME`; all platforms can set `LOCALWEBMONITOREX_CONFIG` to choose another preference file. The `PORT` environment variable takes priority over the saved value.
 
 To choose a port before the first start:
 
@@ -73,14 +95,15 @@ The watched range is `monitor_ports` in [`config/config.exs`](config/config.exs)
 flowchart LR
   Probe[PortProbe behavior] --> Scanner[Bounded Scanner]
   Scanner --> Monitor[Monitor GenServer]
-  Inspector[ProcessInspector behavior] --> Monitor
+  OS[macOS / Linux / Windows adapter] --> Inspector[ProcessInspector behavior]
+  Inspector --> Monitor
   Monitor --> PubSub[Phoenix PubSub]
   PubSub --> LiveView[LiveView dashboard]
   LiveView --> Previews[Sequential preview worker]
   Previews --> WebKit[Playwright WebKit]
 ```
 
-The HTTP probe checks loopback only, limits timeouts, and does not follow a discovered service's redirect to another host. The scanner checks at most 16 ports concurrently. Process inspection runs one `lsof` command and one `ps` command per scan when web services were found. The metrics describe the **listener process**, not a port's isolated resource use; a process listening on multiple ports may appear on multiple cards.
+The HTTP probe checks loopback only, limits timeouts, and does not follow a discovered service's redirect to another host. The scanner checks at most 16 ports concurrently. The macOS/Linux adapter runs one `lsof` and one `ps` command per scan when web services were found; the Windows adapter makes one PowerShell query. The metrics describe the **listener process**, not a port's isolated resource use; a process listening on multiple ports may appear on multiple cards. PowerShell's process CPU property is cumulative time, so the Windows adapter deliberately leaves live CPU percentage unavailable.
 
 Previews are requested only by connected dashboard sessions. Browser navigation and assets are limited to local HTTP(S) addresses. Captures are stored in an OS temporary directory and never committed or uploaded by the app. Login-protected pages and apps that depend on remote assets may show an incomplete initial view.
 
