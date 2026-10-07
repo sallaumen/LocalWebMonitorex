@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=LocalWebMonitorex
+Comment=See web apps running on this computer
+Exec=localwebmonitorex open
+Icon=localwebmonitorex
+Terminal=false
+Categories=Development;Utility;

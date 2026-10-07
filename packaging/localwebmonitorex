@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=/opt/localwebmonitorex
+release="$root/bin/local_web_monitorex"
+
+priv=""
+for candidate in "$root"/lib/local_web_monitorex-*/priv; do
+  if [[ -d "$candidate" ]]; then
+    priv="$candidate"
+    break
+  fi
+done
+
+if [[ ! -x "$release" || -z "$priv" ]]; then
+  echo "LocalWebMonitorex package is incomplete." >&2
+  exit 1
+fi
+
+node="$priv/node/bin/node"
+playwright="$priv/node_modules/playwright/cli.js"
+
+case "${1:-help}" in
+  start)
+    exec env PHX_SERVER=true "$release" start
+    ;;
+  open)
+    port_file="${LOCALWEBMONITOREX_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/localwebmonitorex/port}"
+    port="${PORT:-4100}"
+    if [[ -z "${PORT:-}" && -f "$port_file" ]]; then
+      read -r saved_port < "$port_file" || true
+      saved_port="${saved_port%$'\r'}"
+      if [[ "$saved_port" =~ ^[0-9]+$ ]] && (( saved_port >= 1024 && saved_port <= 65535 )); then
+        port="$saved_port"
+      fi
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl --user daemon-reload || true
+      systemctl --user start localwebmonitorex || true
+    fi
+    ready=false
+    for attempt in {1..40}; do
+      if (echo > "/dev/tcp/127.0.0.1/$port") >/dev/null 2>&1; then
+        ready=true
+        break
+      fi
+      sleep 0.25
+    done
+    if [[ "$ready" != true ]]; then
+      echo "Dashboard is not running. Start it with: localwebmonitorex start" >&2
+      exit 1
+    fi
+    exec xdg-open "http://localhost:$port"
+    ;;
+  install-browser)
+    exec "$node" "$playwright" install webkit
+    ;;
+  install-browser-deps)
+    exec "$node" "$playwright" install-deps webkit
+    ;;
+  *)
+    cat <<EOF
+LocalWebMonitorex
+
+  localwebmonitorex start                 Run the dashboard in this terminal
+  localwebmonitorex open                  Start the user service and open the dashboard
+  localwebmonitorex install-browser       Add WebKit for page previews
+  sudo localwebmonitorex install-browser-deps
+
+For login startup: systemctl --user enable --now localwebmonitorex
+EOF
+    ;;
+esac

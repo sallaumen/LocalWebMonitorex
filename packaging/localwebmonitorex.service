@@ -1,0 +1,13 @@
+[Unit]
+Description=LocalWebMonitorex local web dashboard
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/localwebmonitorex start
+WorkingDirectory=/opt/localwebmonitorex
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

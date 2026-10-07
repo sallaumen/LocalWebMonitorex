@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$(uname -s)" != "Linux" || "$(dpkg --print-architecture)" != "amd64" ]]; then
+  echo "The .deb builder currently targets Linux amd64." >&2
+  exit 1
+fi
+
+project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+cd "$project_dir"
+
+mix deps.get
+npm ci --prefix assets
+MIX_ENV=prod mix assets.deploy
+
+install -Dm755 "$(command -v node)" priv/node/bin/node
+node_root="$(dirname "$(dirname "$(realpath "$(command -v node)")")")"
+if [[ -f "$node_root/LICENSE" ]]; then
+  install -Dm644 "$node_root/LICENSE" priv/node/LICENSE
+elif [[ -f /usr/share/doc/nodejs/copyright ]]; then
+  install -Dm644 /usr/share/doc/nodejs/copyright priv/node/LICENSE
+else
+  echo "Could not find the Node.js license for the bundled runtime." >&2
+  exit 1
+fi
+install -Dm644 assets/capture.mjs priv/capture.mjs
+mkdir -p priv/node_modules
+cp -a assets/node_modules/playwright assets/node_modules/playwright-core priv/node_modules/
+
+MIX_ENV=prod mix release --overwrite
+
+release_root="$project_dir/_build/prod/rel/local_web_monitorex"
+app_dirs=("$release_root"/lib/local_web_monitorex-*)
+if [[ "${#app_dirs[@]}" != 1 || ! -d "${app_dirs[0]}" ]]; then
+  echo "Could not identify the built application version." >&2
+  exit 1
+fi
+version="${app_dirs[0]##*-}"
+package_name="localwebmonitorex_${version}_amd64.deb"
+
+stage="$(mktemp -d)"
+trap 'rm -rf "$stage"' EXIT
+install_dir="$stage/opt/localwebmonitorex"
+mkdir -p "$install_dir"
+cp -a "$release_root/." "$install_dir/"
+
+install -Dm755 packaging/localwebmonitorex "$stage/usr/bin/localwebmonitorex"
+install -Dm644 packaging/localwebmonitorex.service \
+  "$stage/usr/lib/systemd/user/localwebmonitorex.service"
+install -Dm644 packaging/localwebmonitorex.desktop \
+  "$stage/usr/share/applications/localwebmonitorex.desktop"
+install -Dm644 priv/static/images/favicon.svg \
+  "$stage/usr/share/icons/hicolor/scalable/apps/localwebmonitorex.svg"
+install -Dm644 LICENSE "$stage/usr/share/doc/localwebmonitorex/copyright"
+install -Dm644 README.md "$stage/usr/share/doc/localwebmonitorex/README.md"
+
+installed_size="$(du -sk "$stage/opt" | cut -f1)"
+mkdir -p "$stage/DEBIAN" "$project_dir/dist"
+cat > "$stage/DEBIAN/control" <<EOF
+Package: localwebmonitorex
+Version: $version
+Section: devel
+Priority: optional
+Architecture: amd64
+Maintainer: LocalWebMonitorex contributors <sallaumen@users.noreply.github.com>
+Installed-Size: $installed_size
+Depends: libc6 (>= 2.39), libssl3t64
+Recommends: lsof, xdg-utils
+Homepage: https://github.com/sallaumen/LocalWebMonitorex
+Description: Local dashboard for web servers on your computer
+ Find and preview local web applications by port, status, process and resource use.
+ The server listens only on loopback and runs as a user service.
+EOF
+
+dpkg-deb --root-owner-group --build "$stage" "$project_dir/dist/$package_name"
+(
+  cd "$project_dir/dist"
+  sha256sum "$package_name" > "$package_name.sha256"
+)
+
+echo "Built dist/$package_name"
