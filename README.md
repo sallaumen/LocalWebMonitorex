@@ -1,12 +1,14 @@
-# LocalWebMonitorex
+<p align="center"><img src="priv/static/images/favicon.svg" alt="LocalWebMonitorex logo" width="76"></p>
+<h1 align="center">LocalWebMonitorex</h1>
+<p align="center"><strong>Your localhost, at a glance.</strong></p>
 
-**Your localhost, at a glance.** LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps running on your computer and gives each one a live card. See the port, page preview, HTTP status, response time, and—when the operating system exposes it—the listening process, CPU usage, and resident memory. Open any app with one click.
+LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps running on your computer and gives each one a live card. See the port, page preview, HTTP status, response time, and—when the operating system exposes it—the listening process, CPU usage, and resident memory. Open any app with one click.
 
 [![CI](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml/badge.svg)](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-305444)](LICENSE)
 
-![LocalWebMonitorex desktop dashboard showing three sample local web apps](docs/screenshots/dashboard.png)
+![LocalWebMonitorex dashboard showing four sample web apps on ports 4055 through 4058](docs/screenshots/dashboard.png)
 
-<sub>The screenshots use three sample apps, a temporary 4055–4057 demo range, and dashboard port 4381. They contain no contributor applications or private local pages.</sub>
+<sub>These captures show four temporary sample sites on ports 4055–4058. The screenshot session used dashboard port 4381; the product default is 4100. No contributor apps or private pages appear.</sub>
 
 ## Why use it?
 
@@ -22,7 +24,10 @@
 | Linux | Supported | PID, CPU, memory when `lsof` and `ps` are installed | Manual setup |
 | Windows | Supported through PowerShell | PID and memory through `Get-NetTCPConnection` and `Get-Process`; CPU shown as unavailable | Manual setup |
 
-![LocalWebMonitorex mobile dashboard showing sample apps](docs/screenshots/mobile.png)
+<details>
+<summary>See the mobile dashboard</summary>
+<p><img src="docs/screenshots/mobile.png" alt="LocalWebMonitorex mobile dashboard with four local sites" width="375"></p>
+</details>
 
 ## Quick start
 
@@ -79,6 +84,8 @@ Removing the LaunchAgent keeps the installed copy and your saved preferences.
 ## Configuration
 
 Open **Settings** to change the dashboard port or watched range. Both changes take effect on the next process start. The dashboard port accepts 1024–65535 and defaults to **4100**. The watched range is inclusive, defaults to **4000–4099**, accepts ports 1–65535, and is limited to 1,000 ports per scan. The dashboard always excludes its own port even when it falls inside the watched range.
+
+![Settings panel for dashboard port and watched range](docs/screenshots/settings.png)
 
 Preferences are two plain text files: `port` contains one port number, and `range` contains `START-END`. They live in `~/.config/localwebmonitorex/` on macOS/Linux or `%APPDATA%\LocalWebMonitorex\` on Windows. Unix users can set `XDG_CONFIG_HOME`. Set `LOCALWEBMONITOREX_CONFIG` to choose a different port file; the range file defaults to its sibling `range`. Set `LOCALWEBMONITOREX_RANGE_CONFIG` to override that path. The `PORT` environment variable takes priority over the saved dashboard port.
 
