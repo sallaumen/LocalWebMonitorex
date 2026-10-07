@@ -8,7 +8,7 @@ defmodule LocalWebMonitorex.Scanner do
     ports
     |> Task.async_stream(&probe.probe/1,
       max_concurrency: 16,
-      timeout: 2_000,
+      timeout: 3_500,
       on_timeout: :kill_task
     )
     |> Enum.flat_map(&service_result/1)

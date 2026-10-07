@@ -30,6 +30,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
      |> assign(:page_title, "LocalWebMonitorex · Overview")
      |> assign(:query, "")
      |> assign(:settings_open, false)
+     |> assign(:selected_service, nil)
      |> assign(:saved_port, Settings.read_port())
      |> assign(:port_error, nil)
      |> assign(:port_saved, false)
@@ -62,6 +63,17 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
 
   def handle_event("close_settings", _params, socket) do
     {:noreply, assign(socket, :settings_open, false)}
+  end
+
+  def handle_event("open_preview", %{"port" => port}, socket) do
+    case preview_service(socket, port) do
+      nil -> {:noreply, socket}
+      service -> {:noreply, assign(socket, :selected_service, service)}
+    end
+  end
+
+  def handle_event("close_preview", _params, socket) do
+    {:noreply, assign(socket, :selected_service, nil)}
   end
 
   def handle_event("save_port", %{"port" => port}, socket) do
@@ -120,6 +132,10 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
     {:noreply,
      socket
      |> assign_snapshot(snapshot)
+     |> assign(
+       :selected_service,
+       current_selection(socket.assigns.selected_service, snapshot.services)
+     )
      |> assign(:previews, Map.merge(socket.assigns.previews, preview_versions(snapshot.services)))}
   end
 
@@ -211,7 +227,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
             <div class="overview-rule"></div>
             <span class="overview-icon"><.icon name="hero-signal" class="icon" /></span>
             <div>
-              <strong>Automatic scan</strong><small>Every 5 seconds · previews every 30 seconds</small>
+              <strong>Automatic scan</strong><small>Rescans after 5s · previews at least 30s apart</small>
             </div>
           </div>
           <span class="overview-corner" aria-hidden="true">F / 01</span>
@@ -221,7 +237,10 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
           <div class="section-head">
             <div>
               <p class="section-index">01 / DISCOVERED PORTS</p>
-              <h2 id="services-title">Live now <span>{length(@services)}</span></h2>
+              <h2 id="services-title">
+                {if @query == "", do: "Live now", else: "Matches"}
+                <span>{length(filtered_services(@services, @query))}</span>
+              </h2>
             </div>
             <form id="service-filter" phx-change="filter" role="search" class="search-form">
               <.icon name="hero-magnifying-glass" class="icon" />
@@ -261,27 +280,33 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
 
           <div :if={@services != []} class="service-grid">
             <article :for={service <- filtered_services(@services, @query)} class="service-card">
-              <a
+              <button
+                type="button"
                 class="camera"
-                href={Service.url(service)}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={"Open #{Service.url(service)}"}
+                phx-click="open_preview"
+                phx-value-port={service.port}
+                disabled={is_nil(@previews[service.port])}
+                aria-label={"Inspect preview of #{Service.url(service)}"}
               >
-                <img
-                  :if={@previews[service.port]}
-                  src={~p"/previews/#{service.port}?v=#{@previews[service.port]}"}
-                  alt={"Preview of #{Service.url(service)}"}
-                  loading="lazy"
-                />
-                <div :if={is_nil(@previews[service.port])} class="camera-placeholder">
-                  <span class="camera-cross">+</span><span class="camera-port">{service.port}</span><span class="camera-wait">CAPTURING PREVIEW</span>
-                </div>
-                <div class="camera-top">
-                  <span><span class="camera-led"></span> PORT {service.port}</span><span>PREVIEW</span>
-                </div>
-                <div class="camera-open"><.icon name="hero-arrow-up-right" class="icon" /></div>
-              </a>
+                <span class="camera-toolbar">
+                  <span><span class="camera-led"></span> PORT {service.port}</span>
+                  <span>{if @previews[service.port], do: "EXPAND", else: "CAPTURING"}<.icon
+                    name="hero-arrows-pointing-out"
+                    class="icon"
+                  /></span>
+                </span>
+                <span class="camera-screen">
+                  <img
+                    :if={@previews[service.port]}
+                    src={~p"/previews/#{service.port}?v=#{@previews[service.port]}"}
+                    alt=""
+                    loading="lazy"
+                  />
+                  <span :if={is_nil(@previews[service.port])} class="camera-placeholder">
+                    <span class="camera-cross">+</span><span class="camera-port">{service.port}</span><span class="camera-wait">CAPTURING PREVIEW</span>
+                  </span>
+                </span>
+              </button>
               <div class="card-content">
                 <div class="card-title-row">
                   <h3>{service.title || "Local app"}</h3><span class={status_class(service.status)}>{service.status}</span>
@@ -322,6 +347,51 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
           127.0.0.1</span>
         </footer>
       </main>
+      <dialog
+        :if={@selected_service}
+        id="preview-dialog"
+        class="preview-dialog"
+        phx-hook="PreviewDialog"
+        phx-update="ignore"
+        data-preview-port={@selected_service.port}
+        data-preview-src={
+          ~p"/previews/#{@selected_service.port}?v=#{@previews[@selected_service.port]}"
+        }
+        aria-modal="true"
+        aria-labelledby="preview-title"
+      >
+        <div class="preview-head">
+          <div class="preview-heading">
+            <span class="preview-kicker"><span class="camera-led"></span>
+            PORT {@selected_service.port} · SNAPSHOT</span>
+            <h2 id="preview-title">{@selected_service.title || "Local app"}</h2>
+          </div>
+          <div class="preview-actions">
+            <a href={Service.url(@selected_service)} target="_blank" rel="noopener noreferrer">
+              Open app <.icon name="hero-arrow-up-right" class="icon" />
+            </a>
+            <button
+              type="button"
+              data-preview-close
+              phx-click="close_preview"
+              aria-label="Close preview"
+            >
+              <.icon name="hero-x-mark" class="icon" />
+            </button>
+          </div>
+        </div>
+        <div class="preview-stage">
+          <div class="preview-frame">
+            <img
+              src={~p"/previews/#{@selected_service.port}?v=#{@previews[@selected_service.port]}"}
+              alt={"Full preview of #{Service.url(@selected_service)}"}
+            />
+          </div>
+        </div>
+        <div class="preview-foot">
+          <span>{Service.url(@selected_service)}</span><span>Snapshot refreshes while the dashboard is open</span>
+        </div>
+      </dialog>
       <div :if={@settings_open} class="settings-scrim" phx-click="close_settings"></div>
       <section
         :if={@settings_open}
@@ -416,6 +486,21 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   end
 
   defp request_previews(services), do: Enum.each(services, &Previews.request/1)
+
+  defp preview_service(socket, raw_port) do
+    with {port, ""} <- Integer.parse(raw_port),
+         version when not is_nil(version) <- socket.assigns.previews[port] do
+      Enum.find(socket.assigns.services, &(&1.port == port))
+    else
+      _ -> nil
+    end
+  end
+
+  defp current_selection(nil, _services), do: nil
+
+  defp current_selection(selected, services) do
+    Enum.find(services, &(&1.port == selected.port))
+  end
 
   defp preview_versions(services) do
     Map.new(services, fn service -> {service.port, Previews.version(service.port)} end)
