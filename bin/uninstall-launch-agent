@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+agent_label="com.localwebmonitorex"
+agent_target="gui/$(id -u)/$agent_label"
+agent_file="$HOME/Library/LaunchAgents/$agent_label.plist"
+
+launchctl bootout "$agent_target" >/dev/null 2>&1 || true
+rm -f "$agent_file"
+echo "LocalWebMonitorex was removed from login startup. Your port preference was kept."

@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3"
+          elixir-version: "1.19.5-otp-27"
+      - run: mix deps.get
+      - run: mix format --check-formatted
+      - run: mix test
+      - run: mix compile --warnings-as-errors
+      - run: bash -n bin/install-launch-agent bin/uninstall-launch-agent
+
+  assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.3"
+          elixir-version: "1.19.5-otp-27"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - run: mix deps.get
+      - run: npm ci --prefix assets
+      - run: MIX_ENV=prod mix assets.deploy

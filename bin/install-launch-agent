@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$(uname -s)" != "Darwin" ]]; then
+  echo "Automatic startup is currently supported on macOS." >&2
+  exit 1
+fi
+
+project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+agent_label="com.localwebmonitorex"
+agent_file="$HOME/Library/LaunchAgents/$agent_label.plist"
+log_file="$HOME/Library/Logs/LocalWebMonitorex.log"
+
+cd "$project_dir"
+mix deps.get
+npm ci --prefix assets
+./assets/node_modules/.bin/playwright install webkit
+MIX_ENV=prod mix assets.deploy
+
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+PROJECT_DIR="$project_dir" AGENT_FILE="$agent_file" LOG_FILE="$log_file" python3 - <<'PY'
+import os
+import plistlib
+import shutil
+
+mix = shutil.which("mix")
+asdf = shutil.which("asdf")
+node = shutil.which("node")
+runtime_dirs = [os.path.dirname(tool) for tool in (mix, asdf, node) if tool]
+runtime_dirs += ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+runtime_path = os.pathsep.join(dict.fromkeys(runtime_dirs))
+
+config = {
+    "Label": "com.localwebmonitorex",
+    "ProgramArguments": [mix, "phx.server"],
+    "WorkingDirectory": os.environ["PROJECT_DIR"],
+    "EnvironmentVariables": {"MIX_ENV": "prod", "PHX_SERVER": "true", "PATH": runtime_path},
+    "RunAtLoad": True,
+    "KeepAlive": True,
+    "StandardOutPath": os.environ["LOG_FILE"],
+    "StandardErrorPath": os.environ["LOG_FILE"],
+}
+
+with open(os.environ["AGENT_FILE"], "wb") as output:
+    plistlib.dump(config, output)
+PY
+
+agent_target="gui/$(id -u)/$agent_label"
+launchctl bootout "$agent_target" >/dev/null 2>&1 || true
+launchctl bootstrap "gui/$(id -u)" "$agent_file"
+launchctl enable "$agent_target"
+launchctl kickstart -k "$agent_target"
+
+echo "LocalWebMonitorex starts at login. Open http://localhost:4020 (or your saved port)."
+echo "Log: $log_file"
