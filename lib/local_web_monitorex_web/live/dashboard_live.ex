@@ -19,7 +19,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
     snapshot = Monitor.snapshot()
 
     {range_start, range_end} =
-      range_bounds(Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4099))
+      range_bounds(Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4500))
 
     saved_range = Settings.read_range()
 
@@ -152,7 +152,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="app-shell">
+    <div id="theme-preferences" class="app-shell" phx-hook="ThemePreferences">
       <aside class="sidebar" aria-label="Main navigation">
         <a class="brand" href="/" aria-label="LocalWebMonitorex overview">
           <span class="brand-mark" aria-hidden="true"><span></span></span>
@@ -411,6 +411,24 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
         </div>
         <h2 id="settings-title">Dashboard settings</h2>
         <p>This dashboard is running at <strong>localhost:{@dashboard_port}</strong>.</p>
+        <div class="settings-theme">
+          <h3>Appearance</h3>
+          <p>Use your system theme, or keep a choice on this browser.</p>
+          <div class="theme-options" role="group" aria-label="Appearance">
+            <button type="button" data-theme-choice="auto" aria-pressed="false">
+              <.icon name="hero-computer-desktop" class="icon" /> System
+            </button>
+            <button type="button" data-theme-choice="light" aria-pressed="false">
+              <.icon name="hero-sun" class="icon" /> Light
+            </button>
+            <button type="button" data-theme-choice="dark" aria-pressed="false">
+              <.icon name="hero-moon" class="icon" /> Dark
+            </button>
+          </div>
+          <p data-theme-storage-warning hidden role="status">
+            Browser storage is unavailable. This choice will reset when you close the page.
+          </p>
+        </div>
         <form id="port-settings" phx-submit="save_port">
           <label for="dashboard-port">Dashboard port · next start</label>
           <div class="settings-input-row">
@@ -530,6 +548,6 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
     if value == trunc(value), do: Integer.to_string(trunc(value)), else: format_decimal(value)
   end
 
-  defp range_bounds([]), do: {4000, 4099}
+  defp range_bounds([]), do: {4000, 4500}
   defp range_bounds(ports), do: {Enum.min(ports), Enum.max(ports)}
 end

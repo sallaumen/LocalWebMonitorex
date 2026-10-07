@@ -37,6 +37,7 @@ jobs:
           node-version: "22"
       - run: mix deps.get
       - run: npm ci --prefix assets
+      - run: node --test assets/js/theme.test.mjs
       - run: MIX_ENV=prod mix assets.deploy
 
   windows:

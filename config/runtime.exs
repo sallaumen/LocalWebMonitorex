@@ -43,7 +43,7 @@ if config_env() != :test do
          true <- end_port - start_port + 1 <= 1000 do
       start_port..end_port
     else
-      _ -> 4000..4099
+      _ -> 4000..4500
     end
 
   config :local_web_monitorex, monitor_ports: watched_ports

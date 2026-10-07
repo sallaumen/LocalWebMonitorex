@@ -6,13 +6,14 @@ LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps 
 
 [![CI](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml/badge.svg)](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/ci.yml) [![Linux package](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/release.yml/badge.svg)](https://github.com/sallaumen/LocalWebMonitorex/actions/workflows/release.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-305444)](LICENSE)
 
-![LocalWebMonitorex dashboard monitoring six local web apps on ports 4006, 4009, 4013, and 4055 through 4057](docs/screenshots/dashboard.png)
+![LocalWebMonitorex dark dashboard monitoring six local web apps on ports 4006, 4009, 4013, 4055, 4056, and 4500](docs/screenshots/dashboard.png)
 
-<sub>Captured at the default <code>localhost:4100</code> dashboard with the default 4000–4099 watched range. Local projects run on 4006, 4009, and 4013; temporary demo sites run on 4055–4057.</sub>
+<sub>Dark mode on the default <code>localhost:4100</code> dashboard, watching ports 4000–4500. Local projects run on 4006, 4009, and 4013; temporary demo sites run on 4055, 4056, and 4500.</sub>
 
 ## Why use it?
 
-- **Find servers as they come and go.** Ports 4000–4099 are rescanned automatically. A new scan starts five seconds after the previous one finishes. Only responding web apps appear; the dashboard excludes its own port.
+- **Find servers as they come and go.** Ports 4000–4500 are rescanned automatically. A new scan starts five seconds after the previous one finishes. Only responding web apps appear; the dashboard excludes its own port.
+- **Make it yours.** Appearance follows the operating system by default. Choose Light or Dark in Settings to keep that preference across browser and computer restarts.
 - **Recognize a page before opening it.** WebKit captures previews sequentially while a dashboard tab is connected, with at least 30 seconds between captures of the same port. Click a thumbnail to inspect the full snapshot; use the separate link to open the app.
 - **See the process behind a port.** The OS adapter adds the listener's name, PID, CPU percentage, and resident memory when available. Missing permissions or tools are shown as unavailable data.
 - **Keep everything on your machine.** The server binds to `127.0.0.1`. There is no account, database, or remote monitoring service.
@@ -24,17 +25,7 @@ LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps 
 | Linux | Supported | PID, CPU, memory when `lsof` and `ps` are installed | User service in the .deb |
 | Windows | Supported through PowerShell | PID and memory through `Get-NetTCPConnection` and `Get-Process`; CPU shown as unavailable | Manual setup |
 
-<details>
-<summary>See the mobile dashboard</summary>
-<p><img src="docs/screenshots/mobile.png" alt="LocalWebMonitorex mobile dashboard with six local sites" width="375"></p>
-</details>
-
-<details>
-<summary>See an expanded preview</summary>
-<p><img src="docs/screenshots/expanded.png" alt="Expanded preview of a local project, with an explicit Open app action"></p>
-</details>
-
-On startup, **Overview** is the focus: no port is selected. The dashboard listens on **4100**, scans **4000–4099** by default, and shows a card only when a web server responds. Open a thumbnail to inspect its snapshot, or use its URL to enter the app.
+On startup, **Overview** is the focus: no port is selected. The dashboard listens on **4100**, scans **4000–4500** by default, and shows a card only when a web server responds. Open a thumbnail to inspect its snapshot, or use its URL to enter the app.
 
 ## Install
 
@@ -76,7 +67,7 @@ mix assets.build
 mix phx.server
 ```
 
-Open **[http://localhost:4100](http://localhost:4100)**. Port 4100 is the dashboard default; ports 4000–4099 are watched. Open the URL using `localhost`; the Phoenix LiveView connection uses that host.
+Open **[http://localhost:4100](http://localhost:4100)**. Port 4100 is the dashboard default; ports 4000–4500 are watched. Open the URL using `localhost`; the Phoenix LiveView connection uses that host.
 
 On Windows, use PowerShell after installing Elixir/Erlang, Node.js, and Git:
 
@@ -114,9 +105,7 @@ Removing the LaunchAgent keeps the installed copy and your saved preferences.
 
 ## Configuration
 
-Open **Settings** to change the dashboard port or watched range. Both changes take effect on the next process start. The dashboard port accepts 1024–65535 and defaults to **4100**. The watched range is inclusive, defaults to **4000–4099**, accepts ports 1–65535, and is limited to 1,000 ports per scan. The dashboard always excludes its own port even when it falls inside the watched range.
-
-![Settings panel for dashboard port and watched range](docs/screenshots/settings.png)
+Open **Settings** to change the appearance, dashboard port, or watched range. Appearance changes immediately and follows your operating system when **System** is selected. A manual **Light** or **Dark** choice is saved in this browser's local storage, so it survives restarts; browser profiles keep independent choices. The port and range changes take effect on the next process start. The dashboard port accepts 1024–65535 and defaults to **4100**. The watched range is inclusive, defaults to **4000–4500**, accepts ports 1–65535, and is limited to 1,000 ports per scan. The dashboard always excludes its own port even when it falls inside the watched range.
 
 Preferences are two plain text files: `port` contains one port number, and `range` contains `START-END`. They live in `~/.config/localwebmonitorex/` on macOS/Linux or `%APPDATA%\LocalWebMonitorex\` on Windows. Unix users can set `XDG_CONFIG_HOME`. Set `LOCALWEBMONITOREX_CONFIG` to choose a different port file; the range file defaults to its sibling `range`. Set `LOCALWEBMONITOREX_RANGE_CONFIG` to override that path. The `PORT` environment variable takes priority over the saved dashboard port.
 
@@ -125,7 +114,7 @@ To choose a port before the first start:
 ```bash
 mkdir -p ~/.config/localwebmonitorex
 printf '4321\n' > ~/.config/localwebmonitorex/port
-printf '4000-4099\n' > ~/.config/localwebmonitorex/range
+printf '4000-4500\n' > ~/.config/localwebmonitorex/range
 ```
 
 The dashboard shows the active range. Invalid preference contents fall back to the built-in defaults.
@@ -144,7 +133,7 @@ flowchart LR
   Previews --> WebKit[Playwright WebKit]
 ```
 
-The HTTP probe checks loopback only, allows up to 1.5 seconds for a local response, and does not follow a discovered service's redirect to another host. The scanner checks at most 16 ports concurrently. The macOS/Linux adapter runs one `lsof` and one `ps` command per scan when web services were found; the Windows adapter makes one PowerShell query. The metrics describe the **listener process**, not a port's isolated resource use; a process listening on multiple ports may appear on multiple cards. PowerShell's process CPU property is cumulative time, so the Windows adapter deliberately leaves live CPU percentage unavailable.
+The scanner first makes a short TCP availability check, then requests a page only from ports that accept connections. It checks loopback only, allows up to 1.5 seconds for a local HTTP response, and does not follow a discovered service's redirect to another host. At most 16 ports are checked concurrently; closed ports never launch HTTP or HTTPS requests. The macOS/Linux adapter runs one `lsof` and one `ps` command per scan when web services were found; the Windows adapter makes one PowerShell query. The metrics describe the **listener process**, not a port's isolated resource use; a process listening on multiple ports may appear on multiple cards. PowerShell's process CPU property is cumulative time, so the Windows adapter deliberately leaves live CPU percentage unavailable.
 
 Previews are requested only by connected dashboard sessions. Browser navigation and assets are limited to local HTTP(S) addresses. Captures are stored in an OS temporary directory and never committed or uploaded by the app. Login-protected pages and apps that depend on remote assets may show an incomplete initial view.
 
@@ -152,6 +141,7 @@ Previews are requested only by connected dashboard sessions. Browser navigation 
 
 ```bash
 mix test
+node --test assets/js/theme.test.mjs
 mix format --check-formatted
 mix compile --warnings-as-errors
 MIX_ENV=prod mix assets.deploy
