@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Prepares this project copy to run with `MIX_ENV=prod mix phx.server`.
+# The installer and the updater both run it inside the copy they are building.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+mix deps.get
+npm ci --prefix assets
+./assets/node_modules/.bin/playwright install webkit
+MIX_ENV=prod mix assets.deploy
+MIX_ENV=prod mix compile
