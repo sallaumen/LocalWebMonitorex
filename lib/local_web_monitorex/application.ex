@@ -10,6 +10,7 @@ defmodule LocalWebMonitorex.Application do
       {Phoenix.PubSub, name: LocalWebMonitorex.PubSub},
       {Task.Supervisor, name: LocalWebMonitorex.TaskSupervisor},
       LocalWebMonitorex.Monitor,
+      {LocalWebMonitorex.Sweeper, Application.get_env(:local_web_monitorex, :sweeper, [])},
       LocalWebMonitorex.Previews,
       LocalWebMonitorexWeb.Endpoint
     ]

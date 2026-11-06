@@ -1,5 +1,5 @@
 defmodule LocalWebMonitorex.Settings do
-  @moduledoc "Stores dashboard and watched-range preferences in local files."
+  @moduledoc "Stores the dashboard port, watched range and wide sweep switch in local files."
 
   @default_port 4100
   @default_range 4000..4500
@@ -12,6 +12,9 @@ defmodule LocalWebMonitorex.Settings do
 
   @spec range_path() :: String.t()
   def range_path, do: Application.fetch_env!(:local_web_monitorex, :range_settings_file)
+
+  @spec sweep_path() :: String.t()
+  def sweep_path, do: Application.fetch_env!(:local_web_monitorex, :sweep_settings_file)
 
   @spec read_port(String.t()) :: pos_integer()
   def read_port(path \\ path()) do
@@ -60,6 +63,32 @@ defmodule LocalWebMonitorex.Settings do
       :ok
     end
   end
+
+  @doc "Reads the wide sweep switch. A missing or unreadable file means on."
+  @spec read_sweep(String.t()) :: boolean()
+  def read_sweep(path \\ sweep_path()) do
+    with {:ok, value} <- File.read(path),
+         {:ok, enabled} <- parse_sweep(String.trim(value)) do
+      enabled
+    else
+      _ -> true
+    end
+  end
+
+  @doc "Saves the wide sweep switch from a boolean, `\"on\"` or `\"off\"`."
+  @spec save_sweep(boolean() | String.t(), String.t()) ::
+          :ok | {:error, :invalid_sweep | File.posix()}
+  def save_sweep(value, path \\ sweep_path()) do
+    with {:ok, enabled} <- parse_sweep(value),
+         :ok <- File.mkdir_p(Path.dirname(path)) do
+      write_atomically(path, if(enabled, do: "on\n", else: "off\n"))
+    end
+  end
+
+  defp parse_sweep(value) when is_boolean(value), do: {:ok, value}
+  defp parse_sweep("on"), do: {:ok, true}
+  defp parse_sweep("off"), do: {:ok, false}
+  defp parse_sweep(_value), do: {:error, :invalid_sweep}
 
   defp parse_port(value) when is_integer(value) and value in 1024..65_535, do: {:ok, value}
 

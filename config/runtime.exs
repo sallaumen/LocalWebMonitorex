@@ -19,6 +19,10 @@ range_settings_file =
   System.get_env("LOCALWEBMONITOREX_RANGE_CONFIG") ||
     Path.join(Path.dirname(settings_file), "range")
 
+sweep_settings_file =
+  System.get_env("LOCALWEBMONITOREX_SWEEP_CONFIG") ||
+    Path.join(Path.dirname(settings_file), "sweep")
+
 saved_port =
   case File.read(settings_file) do
     {:ok, value} ->
@@ -57,6 +61,7 @@ port =
 config :local_web_monitorex,
   settings_file: settings_file,
   range_settings_file: range_settings_file,
+  sweep_settings_file: sweep_settings_file,
   dashboard_port: port
 
 config :local_web_monitorex, LocalWebMonitorexWeb.Endpoint,

@@ -13,6 +13,7 @@ LocalWebMonitorex is a small Phoenix LiveView dashboard that finds the web apps 
 ## Why use it?
 
 - **Find servers as they come and go.** Ports 4000–4500 are rescanned automatically. A new scan starts five seconds after the previous one finishes. Only responding web apps appear; the dashboard excludes its own port.
+- **Notice what runs elsewhere.** A slow background sweep checks the rest of `127.0.0.1` about once an hour and lists other listening ports in a small panel at the bottom left. One switch turns it off.
 - **Make it yours.** Appearance follows the operating system by default. Choose Light or Dark in Settings to keep that preference across browser and computer restarts.
 - **Recognize a page before opening it.** WebKit captures previews sequentially while a dashboard tab is connected, with at least 30 seconds between captures of the same port. Click a thumbnail to inspect the full snapshot; use the separate link to open the app.
 - **See the process behind a port.** The OS adapter adds the listener's name, PID, CPU percentage, and resident memory when available. Missing permissions or tools are shown as unavailable data.
@@ -128,9 +129,9 @@ Installations made before the updater existed keep their files in place: re-run 
 
 ## Configuration
 
-Open **Settings** to change the appearance, dashboard port, or watched range. Appearance changes immediately and follows your operating system when **System** is selected. A manual **Light** or **Dark** choice is saved in this browser's local storage, so it survives restarts; browser profiles keep independent choices. The port and range changes take effect on the next process start. The dashboard port accepts 1024–65535 and defaults to **4100**. The watched range is inclusive, defaults to **4000–4500**, and can be any span of ports 1–65535, including the whole port space. The fields accept grouped thousands such as `4.000` or `4,000`. A large range takes longer to scan: the scanner probes at most 16 ports at a time and gives each one 3.5 seconds, and the next scan starts 5 seconds after the previous one finishes, so scans never overlap. The top of the dashboard shows how many ports the current scan has checked. The dashboard always excludes its own port even when it falls inside the watched range.
+Open **Settings** to change the appearance, dashboard port, or watched range. The wide sweep switch is in the **Other ports** panel. Appearance changes immediately and follows your operating system when **System** is selected. A manual **Light** or **Dark** choice is saved in this browser's local storage, so it survives restarts; browser profiles keep independent choices. The port and range changes take effect on the next process start. The dashboard port accepts 1024–65535 and defaults to **4100**. The watched range is inclusive, defaults to **4000–4500**, and can be any span of ports 1–65535, including the whole port space. The fields accept grouped thousands such as `4.000` or `4,000`. A large range takes longer to scan: the scanner probes at most 16 ports at a time and gives each one 3.5 seconds, and the next scan starts 5 seconds after the previous one finishes, so scans never overlap. The top of the dashboard shows how many ports the current scan has checked. The dashboard always excludes its own port even when it falls inside the watched range.
 
-Preferences are two plain text files: `port` contains one port number, and `range` contains `START-END`. They live in `~/.config/localwebmonitorex/` on macOS/Linux or `%APPDATA%\LocalWebMonitorex\` on Windows. Unix users can set `XDG_CONFIG_HOME`. Set `LOCALWEBMONITOREX_CONFIG` to choose a different port file; the range file defaults to its sibling `range`. Set `LOCALWEBMONITOREX_RANGE_CONFIG` to override that path. The `PORT` environment variable takes priority over the saved dashboard port.
+Preferences are three plain text files: `port` contains one port number, `range` contains `START-END`, and `sweep` contains `on` or `off`. They live in `~/.config/localwebmonitorex/` on macOS/Linux or `%APPDATA%\LocalWebMonitorex\` on Windows. Unix users can set `XDG_CONFIG_HOME`. Set `LOCALWEBMONITOREX_CONFIG` to choose a different port file; the range file defaults to its sibling `range`. Set `LOCALWEBMONITOREX_RANGE_CONFIG` to override that path, and `LOCALWEBMONITOREX_SWEEP_CONFIG` to override the sibling `sweep` file. A missing or invalid `sweep` file means on. The `PORT` environment variable takes priority over the saved dashboard port.
 
 To choose a port before the first start:
 
@@ -142,6 +143,18 @@ printf '4000-4500\n' > ~/.config/localwebmonitorex/range
 
 The dashboard shows the active range. Invalid preference contents fall back to the built-in defaults.
 
+## Wide sweep
+
+Services often listen outside the watched range, on ports such as 8080 or 64120. The wide sweep finds them without making the main scan slower:
+
+- It walks `127.0.0.1` ports 1–65535 in its own process, separate from the main scan. It skips the watched range and the dashboard port, so it never checks the same ports twice.
+- It checks 32 ports per batch, at most 4 at a time, and pauses one second between batches. A full pass takes about 45 minutes. The next pass starts one hour after the previous one ends. The first pass starts one minute after LocalWebMonitorex starts.
+- Each port gets the same short TCP check as the main scan. Ports that accept a connection are asked for an HTTP or HTTPS page and recorded as **HTTP** with their status, or as **TCP** when they answer neither. The listener's process name is added when the OS adapter can read it. The sweep takes no screenshots.
+
+The **Other ports** panel at the bottom left shows the sweep's progress or the time of the next pass, and the ports it found. Open an HTTP port in a new tab, or use **+** to fill the watched-range form so that it covers that port; nothing is saved until you choose **Save range**. The **Wide sweep** switch stops a running pass immediately and starts a new one when you turn it back on, without a restart.
+
+The sweep is on by default. It stays on loopback and its rate is fixed and low. Turning it off is saved for the next start.
+
 ## How it works
 
 ```mermaid
@@ -151,6 +164,9 @@ flowchart LR
   OS[macOS / Linux / Windows adapter] --> Inspector[ProcessInspector behavior]
   Inspector --> Monitor
   Monitor --> PubSub[Phoenix PubSub]
+  Probe --> Sweeper[Wide Sweeper]
+  Inspector --> Sweeper
+  Sweeper --> PubSub
   PubSub --> LiveView[LiveView dashboard]
   LiveView --> Previews[Sequential preview worker]
   Previews --> WebKit[Playwright WebKit]

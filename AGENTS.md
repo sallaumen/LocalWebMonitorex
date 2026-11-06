@@ -10,6 +10,7 @@ Read `CLAUDE.md` before changing the application. This is a local Phoenix LiveVi
 - Give public domain functions specs. Inject port probing through the `PortProbe` behavior.
 - Collect optional process metrics through the `ProcessInspector` behavior and per-OS adapters. Keep process commands bounded, and show unavailable data honestly.
 - Use `Req` for HTTP requests. Bound concurrency and timeouts, and do not follow a discovered service's redirect to a remote host.
+- Discovery is local-only. The main scan probes only the watched range. The only approved probing outside it is `Sweeper`'s slow, switchable sweep of `127.0.0.1`, which skips the watched range and the dashboard port and takes no screenshots. See `CLAUDE.md` for its limits.
 - Keep screenshots sequential and local. Do not commit captures of applications running on a contributor's computer.
 - Validate incrementally: focused tests, affected tests, then the full suite for shared infrastructure. Run `mix format --check-formatted` and `mix compile --warnings-as-errors` before a pull request.
 

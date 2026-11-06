@@ -4,6 +4,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   import LocalWebMonitorexWeb.DashboardComponents
   import LocalWebMonitorexWeb.ScanProgress
   import LocalWebMonitorexWeb.StopDialog
+  import LocalWebMonitorexWeb.SweepPanel
   import LocalWebMonitorexWeb.UpdateStatusPanel
 
   alias LocalWebMonitorex.Monitor
@@ -11,6 +12,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   alias LocalWebMonitorex.ProcessTerminator
   alias LocalWebMonitorex.Service
   alias LocalWebMonitorex.Settings
+  alias LocalWebMonitorex.Sweeper
   alias LocalWebMonitorex.UpdateStatus
 
   @preview_interval 30_000
@@ -20,6 +22,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
     if connected?(socket) do
       Monitor.subscribe()
       Previews.subscribe()
+      Sweeper.subscribe()
       Process.send_after(self(), :refresh_previews, @preview_interval)
     end
 
@@ -53,6 +56,10 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
      |> assign(:range_end_input, saved_range.last)
      |> assign(:range_error, nil)
      |> assign(:range_saved, false)
+     |> assign(:range_hint, nil)
+     |> assign(:sweep, Sweeper.snapshot())
+     |> assign(:sweep_open, false)
+     |> assign(:sweep_error, nil)
      |> assign(:dashboard_port, Application.get_env(:local_web_monitorex, :dashboard_port, 4100))
      |> assign(:range_start, range_start)
      |> assign(:range_end, range_end)
@@ -153,7 +160,37 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
     end
   end
 
+  def handle_event("toggle_sweep_panel", _params, socket) do
+    {:noreply, update(socket, :sweep_open, &(not &1))}
+  end
+
+  def handle_event("close_sweep_panel", _params, socket) do
+    {:noreply, assign(socket, :sweep_open, false)}
+  end
+
+  def handle_event("set_sweep", %{"enabled" => enabled}, socket) do
+    error =
+      case Sweeper.set_enabled(enabled == "true") do
+        :ok -> nil
+        {:error, _reason} -> "Could not save the sweep setting."
+      end
+
+    {:noreply,
+     socket
+     |> assign(:sweep, Sweeper.snapshot())
+     |> assign(:sweep_error, error)}
+  end
+
+  def handle_event("watch_port", %{"port" => raw_port}, socket) do
+    case Integer.parse(raw_port) do
+      {port, ""} when port in 1..65_535 -> {:noreply, suggest_range(socket, port)}
+      _ -> {:noreply, socket}
+    end
+  end
+
   def handle_event("save_range", %{"start" => first, "end" => last}, socket) do
+    socket = assign(socket, :range_hint, nil)
+
     case Settings.save_range(first, last) do
       :ok ->
         saved_range = Settings.read_range()
@@ -195,6 +232,10 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
        current_selection(socket.assigns.selected_service, snapshot.services)
      )
      |> assign(:previews, Map.merge(socket.assigns.previews, preview_versions(snapshot.services)))}
+  end
+
+  def handle_info({:sweep_updated, sweep}, socket) do
+    {:noreply, assign(socket, :sweep, sweep)}
   end
 
   def handle_info({:scan_progress, progress}, socket) do
@@ -379,6 +420,12 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
           </div>
         </section>
 
+        <.sweep_panel
+          sweep={@sweep}
+          open={@sweep_open}
+          range={"#{@range_start}–#{@range_end}"}
+          error={@sweep_error}
+        />
         <footer class="page-footer">
           <span>Served on the loopback interface only. Other devices cannot open this page.</span>
           <span class="mono">127.0.0.1:{@dashboard_port}</span>
@@ -576,6 +623,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
             <p :if={@range_saved} class="settings-success" role="status">
               Saved. Restart LocalWebMonitorex to use the new range.
             </p>
+            <p :if={@range_hint} class="settings-hint" role="status">{@range_hint}</p>
           </form>
         </div>
         <.update_status_panel status={@update_status} />
@@ -592,6 +640,19 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
     |> assign(:services, snapshot.services)
     |> assign(:checked_at, snapshot.checked_at)
     |> assign(:scanning, snapshot.scanning)
+  end
+
+  defp suggest_range(socket, port) do
+    saved = Settings.read_range()
+    {first, last} = {min(saved.first, port), max(saved.last, port)}
+
+    socket
+    |> assign(:range_start_input, first)
+    |> assign(:range_end_input, last)
+    |> assign(:range_error, nil)
+    |> assign(:range_saved, false)
+    |> assign(:range_hint, "Save to watch port #{port} from the next start.")
+    |> assign(:settings_open, true)
   end
 
   defp request_previews(services), do: Enum.each(services, &Previews.request/1)
