@@ -75,3 +75,6 @@ if config_env() == :prod do
 
   config :local_web_monitorex, LocalWebMonitorexWeb.Endpoint, secret_key_base: secret_key_base
 end
+
+config :local_web_monitorex,
+  update_status_file: System.get_env("LOCALWEBMONITOREX_UPDATE_STATUS")

@@ -2,12 +2,14 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   use LocalWebMonitorexWeb, :live_view
 
   import LocalWebMonitorexWeb.StopDialog
+  import LocalWebMonitorexWeb.UpdateStatusPanel
 
   alias LocalWebMonitorex.Monitor
   alias LocalWebMonitorex.Previews
   alias LocalWebMonitorex.ProcessTerminator
   alias LocalWebMonitorex.Service
   alias LocalWebMonitorex.Settings
+  alias LocalWebMonitorex.UpdateStatus
 
   @preview_interval 30_000
 
@@ -33,6 +35,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
      |> assign(:page_title, "LocalWebMonitorex · Overview")
      |> assign(:query, "")
      |> assign(:settings_open, false)
+     |> assign(:update_status, UpdateStatus.read())
      |> assign(:selected_service, nil)
      |> assign(:stop_target, nil)
      |> assign(:stop_task, nil)
@@ -64,7 +67,10 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   end
 
   def handle_event("open_settings", _params, socket) do
-    {:noreply, assign(socket, :settings_open, true)}
+    {:noreply,
+     socket
+     |> assign(:settings_open, true)
+     |> assign(:update_status, UpdateStatus.read())}
   end
 
   def handle_event("close_settings", _params, socket) do
@@ -558,6 +564,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
             </p>
           </form>
         </div>
+        <.update_status_panel status={@update_status} />
         <div class="settings-note">
           <.icon name="hero-document-text" class="icon" /><span>Local preferences<br /><code>{@settings_file}</code><br /><code>{@range_file}</code></span>
         </div>
