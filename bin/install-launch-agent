@@ -7,24 +7,52 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-install_dir="$HOME/Library/Application Support/LocalWebMonitorex"
+support_dir="$HOME/Library/Application Support"
+install_link="$support_dir/LocalWebMonitorex"
+versions_dir="$support_dir/LocalWebMonitorex-versions"
+update_dir="$support_dir/LocalWebMonitorex-updater"
 agent_label="com.localwebmonitorex"
+updater_label="com.localwebmonitorex.updater"
 agent_file="$HOME/Library/LaunchAgents/$agent_label.plist"
+updater_file="$HOME/Library/LaunchAgents/$updater_label.plist"
 log_file="$HOME/Library/Logs/LocalWebMonitorex.log"
+updater_log="$HOME/Library/Logs/LocalWebMonitorex-updater.log"
+default_remote="https://github.com/sallaumen/LocalWebMonitorex.git"
 
-mkdir -p "$install_dir"
-if [[ "$project_dir" != "$install_dir" ]]; then
-  rsync -a --delete --exclude '/.git/' --exclude '/_build/' "$project_dir/" "$install_dir/"
+case "$project_dir/" in
+  "$install_link/"* | "$versions_dir/"*)
+    echo "Run this installer from your source checkout, not from the installed copy." >&2
+    exit 1
+    ;;
+esac
+
+if ! revision="$(git -C "$project_dir" rev-parse --verify HEAD 2>/dev/null)"; then
+  echo "Run this installer from a git checkout so the installed commit is known." >&2
+  exit 1
 fi
 
-cd "$install_dir"
-mix deps.get
-npm ci --prefix assets
-./assets/node_modules/.bin/playwright install webkit
-MIX_ENV=prod mix assets.deploy
+# The updater fetches anonymously, so an SSH GitHub remote is read over HTTPS.
+remote="$(git -C "$project_dir" remote get-url origin 2>/dev/null || echo "$default_remote")"
+case "$remote" in
+  git@github.com:*) remote="https://github.com/${remote#git@github.com:}" ;;
+  ssh://git@github.com/*) remote="https://github.com/${remote#ssh://git@github.com/}" ;;
+esac
 
-mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
-PROJECT_DIR="$install_dir" AGENT_FILE="$agent_file" LOG_FILE="$log_file" python3 - <<'PY'
+version_name="$revision"
+if [[ -n "$(git -C "$project_dir" status --porcelain 2>/dev/null)" ]]; then
+  version_name="$revision-local"
+fi
+version_dir="$versions_dir/$version_name"
+
+mkdir -p "$version_dir" "$update_dir" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+rsync -a --delete --exclude '/.git' --exclude '/_build/' --exclude '/REVISION' \
+  "$project_dir/" "$version_dir/"
+printf '%s\n' "$revision" > "$version_dir/REVISION"
+"$version_dir/bin/build-installation"
+
+PROJECT_DIR="$install_link" UPDATE_DIR="$update_dir" VERSIONS_DIR="$versions_dir" \
+  REMOTE="$remote" AGENT_FILE="$agent_file" UPDATER_FILE="$updater_file" \
+  LOG_FILE="$log_file" UPDATER_LOG="$updater_log" python3 - <<'PY'
 import os
 import plistlib
 import shutil
@@ -35,40 +63,87 @@ node = shutil.which("node")
 runtime_dirs = [os.path.dirname(tool) for tool in (mix, asdf, node) if tool]
 runtime_dirs += ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
 runtime_path = os.pathsep.join(dict.fromkeys(runtime_dirs))
+status_file = os.path.join(os.environ["UPDATE_DIR"], "status")
 
-config = {
+service = {
     "Label": "com.localwebmonitorex",
     "ProgramArguments": [mix, "phx.server"],
     "WorkingDirectory": os.environ["PROJECT_DIR"],
-    "EnvironmentVariables": {"MIX_ENV": "prod", "PHX_SERVER": "true", "PATH": runtime_path},
+    "EnvironmentVariables": {
+        "MIX_ENV": "prod",
+        "PHX_SERVER": "true",
+        "PATH": runtime_path,
+        "LOCALWEBMONITOREX_UPDATE_STATUS": status_file,
+    },
     "RunAtLoad": True,
     "KeepAlive": True,
     "StandardOutPath": os.environ["LOG_FILE"],
     "StandardErrorPath": os.environ["LOG_FILE"],
 }
 
-with open(os.environ["AGENT_FILE"], "wb") as output:
-    plistlib.dump(config, output)
+updater = {
+    "Label": "com.localwebmonitorex.updater",
+    "ProgramArguments": ["/bin/bash", os.path.join(os.environ["UPDATE_DIR"], "update-from-main")],
+    "EnvironmentVariables": {
+        "PATH": runtime_path,
+        "LOCALWEBMONITOREX_INSTALL_DIR": os.environ["PROJECT_DIR"],
+        "LOCALWEBMONITOREX_VERSIONS_DIR": os.environ["VERSIONS_DIR"],
+        "LOCALWEBMONITOREX_UPDATE_DIR": os.environ["UPDATE_DIR"],
+        "LOCALWEBMONITOREX_UPDATE_REMOTE": os.environ["REMOTE"],
+    },
+    "StartInterval": 3600,
+    "RunAtLoad": True,
+    "Nice": 10,
+    "StandardOutPath": os.environ["UPDATER_LOG"],
+    "StandardErrorPath": os.environ["UPDATER_LOG"],
+}
+
+for path, config in ((os.environ["AGENT_FILE"], service), (os.environ["UPDATER_FILE"], updater)):
+    with open(path, "wb") as output:
+        plistlib.dump(config, output)
 PY
 
-agent_target="gui/$(id -u)/$agent_label"
-launchctl bootout "$agent_target" >/dev/null 2>&1 || true
-bootstrap_error=""
-registered=false
-for attempt in 1 2 3 4 5; do
-  if bootstrap_error="$(launchctl bootstrap "gui/$(id -u)" "$agent_file" 2>&1)"; then
-    registered=true
-    break
-  fi
-  sleep 1
-done
-if [[ "$registered" != true ]]; then
-  echo "$bootstrap_error" >&2
-  exit 1
+domain="gui/$(id -u)"
+launchctl bootout "$domain/$updater_label" >/dev/null 2>&1 || true
+launchctl bootout "$domain/$agent_label" >/dev/null 2>&1 || true
+
+# Earlier installers kept a real directory here; keep it as the previous version.
+previous_version=""
+if [[ -L "$install_link" ]]; then
+  previous_version="$(readlink "$install_link")"
+elif [[ -d "$install_link" ]]; then
+  previous_version="$versions_dir/legacy-$(date +%s)"
+  mv "$install_link" "$previous_version"
 fi
-launchctl enable "$agent_target"
-launchctl kickstart -k "$agent_target"
+ln -sfn "$version_dir" "$install_link"
+
+for directory in "$versions_dir"/*; do
+  [[ -d "$directory" && ! -L "$directory" ]] || continue
+  [[ "$directory" == "$version_dir" || "$directory" == "$previous_version" ]] && continue
+  rm -rf "$directory"
+done
+
+install -m 755 "$version_dir/bin/update-from-main" "$update_dir/update-from-main"
+
+bootstrap_agent() {
+  local file=$1 bootstrap_error=""
+  for _ in 1 2 3 4 5; do
+    if bootstrap_error="$(launchctl bootstrap "$domain" "$file" 2>&1)"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "$bootstrap_error" >&2
+  return 1
+}
+
+bootstrap_agent "$agent_file"
+launchctl enable "$domain/$agent_label"
+launchctl kickstart -k "$domain/$agent_label"
+bootstrap_agent "$updater_file"
+launchctl enable "$domain/$updater_label"
 
 echo "LocalWebMonitorex starts at login. Open http://localhost:4100 (or your saved port)."
-echo "Installed at: $install_dir"
-echo "Log: $log_file"
+echo "Installed commit: $revision ($version_dir)"
+echo "It checks $remote main about once an hour and updates itself."
+echo "Logs: $log_file and $updater_log"

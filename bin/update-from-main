@@ -1,0 +1,291 @@
+#!/usr/bin/env bash
+# Keeps a macOS installation on remote main. The updater LaunchAgent runs a
+# private copy of this script about once an hour.
+#
+# The installation path is a symlink to a built version directory. A newer main
+# is fetched into a private repository, exported to its own version directory,
+# built and started on a spare loopback port. Only a candidate that serves its
+# own commit there replaces the running version. A failure leaves the current
+# version running and records why in the status file the dashboard reads.
+set -euo pipefail
+umask 022
+
+install_link=${LOCALWEBMONITOREX_INSTALL_DIR:-"$HOME/Library/Application Support/LocalWebMonitorex"}
+versions_dir=${LOCALWEBMONITOREX_VERSIONS_DIR:-"$HOME/Library/Application Support/LocalWebMonitorex-versions"}
+state_dir=${LOCALWEBMONITOREX_UPDATE_DIR:-"$HOME/Library/Application Support/LocalWebMonitorex-updater"}
+remote=${LOCALWEBMONITOREX_UPDATE_REMOTE:-https://github.com/sallaumen/LocalWebMonitorex.git}
+port_file=${LOCALWEBMONITOREX_CONFIG:-"${XDG_CONFIG_HOME:-$HOME/.config}/localwebmonitorex/port"}
+agent_label=${LOCALWEBMONITOREX_AGENT_LABEL:-com.localwebmonitorex}
+launchctl_command=${LOCALWEBMONITOREX_LAUNCHCTL:-launchctl}
+read -r -a server_command <<<"${LOCALWEBMONITOREX_SERVER_COMMAND:-mix phx.server}"
+build_seconds=${LOCALWEBMONITOREX_BUILD_SECONDS:-1800}
+smoke_seconds=${LOCALWEBMONITOREX_SMOKE_SECONDS:-120}
+health_seconds=${LOCALWEBMONITOREX_HEALTH_SECONDS:-180}
+
+mirror="$state_dir/repository"
+status_file="$state_dir/status"
+lock_dir="$state_dir/lock"
+
+installed=""
+available=""
+behind=""
+phase=""
+reason=""
+checked_at=""
+candidate=""
+smoke_pid=""
+smoke_dir=""
+
+log() {
+  printf '%s update-from-main: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2
+}
+
+write_status() {
+  local temporary="$status_file.tmp.$$"
+  printf 'installed_sha=%s\navailable_sha=%s\nphase=%s\nbehind=%s\nreason=%s\nchecked_at=%s\n' \
+    "$installed" "$available" "$phase" "$behind" "$reason" "$checked_at" >"$temporary"
+  mv -f "$temporary" "$status_file"
+}
+
+# Records the outcome and ends the pass. Failures exit non-zero for the log.
+finish() {
+  phase=$1
+  reason=${2:-}
+  write_status
+  log "phase=$phase${reason:+ reason=$reason} installed=$installed available=$available"
+  [[ $phase != failed ]] || exit 1
+  exit 0
+}
+
+alive() {
+  local state
+  state=$(ps -o stat= -p "$1" 2>/dev/null) || return 1
+  [[ -n $state && $state != Z* ]]
+}
+
+descendants() {
+  local child
+  for child in $(pgrep -P "$1" 2>/dev/null); do
+    echo "$child"
+    descendants "$child"
+  done
+}
+
+# Stops a step and everything it started: TERM first, KILL after a grace.
+stop_tree() {
+  local -a tree
+  read -r -a tree <<<"$1 $(descendants "$1" | tr '\n' ' ')"
+  kill -TERM "${tree[@]}" 2>/dev/null || true
+  for _ in $(seq 1 20); do
+    alive "$1" || break
+    sleep 0.5
+  done
+  kill -KILL "${tree[@]}" 2>/dev/null || true
+  wait "$1" 2>/dev/null || true
+}
+
+run_bounded() {
+  local limit=$1 pid waited=0
+  shift
+  "$@" &
+  pid=$!
+  while alive "$pid"; do
+    if ((waited >= limit)); then
+      log "step ran past ${limit}s and was stopped: $*"
+      stop_tree "$pid"
+      return 124
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  wait "$pid"
+}
+
+cleanup() {
+  [[ -z $smoke_pid ]] || stop_tree "$smoke_pid"
+  [[ -z $smoke_dir ]] || rm -rf "$smoke_dir"
+  rm -rf "$lock_dir"
+}
+
+acquire_lock() {
+  local holder
+  mkdir -p "$state_dir"
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    holder=$(cat "$lock_dir/pid" 2>/dev/null || true)
+    if [[ -n $holder ]] && alive "$holder"; then
+      log "another update pass is running (pid $holder)"
+      exit 0
+    fi
+    rm -rf "$lock_dir"
+    mkdir "$lock_dir"
+  fi
+  echo $$ >"$lock_dir/pid"
+  trap cleanup EXIT
+}
+
+read_installed() {
+  installed=$(tr -d '[:space:]' <"$install_link/REVISION" 2>/dev/null || true)
+  [[ $installed =~ ^[0-9a-f]{40}$ ]] || {
+    installed=""
+    finish failed installed_revision_missing
+  }
+}
+
+fetch_main() {
+  [[ -d $mirror ]] || git init --quiet --bare "$mirror"
+  GIT_HTTP_LOW_SPEED_LIMIT=1000 GIT_HTTP_LOW_SPEED_TIME=30 \
+    run_bounded 300 git -C "$mirror" fetch --quiet "$remote" "+refs/heads/main:refs/heads/main" ||
+    finish failed fetch_failed
+  available=$(git -C "$mirror" rev-parse --verify refs/heads/main) || finish failed fetch_failed
+}
+
+compare_with_main() {
+  if [[ $installed == "$available" ]]; then
+    behind=0
+    finish up_to_date
+  fi
+  git -C "$mirror" merge-base --is-ancestor "$installed" "$available" 2>/dev/null ||
+    finish diverged
+  behind=$(git -C "$mirror" rev-list --count "$installed..$available")
+  phase=behind
+  write_status
+  log "installed $installed is $behind commit(s) behind main $available"
+}
+
+discard_candidate() {
+  rm -rf "$candidate"
+  finish failed "$1"
+}
+
+build_candidate() {
+  candidate="$versions_dir/$available"
+  [[ $candidate != "$(readlink "$install_link")" ]] || finish failed switch_failed
+  rm -rf "$candidate"
+  mkdir -p "$candidate"
+  git -C "$mirror" archive "$available" | tar -x -C "$candidate" || discard_candidate build_failed
+  printf '%s\n' "$available" >"$candidate/REVISION"
+  log "building $available"
+  (cd "$candidate" && run_bounded "$build_seconds" ./bin/build-installation) >&2 ||
+    discard_candidate build_failed
+}
+
+free_port() {
+  python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
+}
+
+# Waits until the dashboard on `port` serves the expected commit.
+serves_revision() {
+  local port=$1 seconds=$2 revision=$3 watched_pid=${4:-} deadline body
+  deadline=$(($(date +%s) + seconds))
+  while (($(date +%s) < deadline)); do
+    body=$(curl -fsS --max-time 3 "http://127.0.0.1:$port/" 2>/dev/null || true)
+    [[ $body != *"name=\"localwebmonitorex-revision\" content=\"$revision\""* ]] || return 0
+    [[ -z $watched_pid ]] || alive "$watched_pid" || return 1
+    sleep 2
+  done
+  return 1
+}
+
+# The candidate gets its own port, an empty watched range and throwaway
+# preferences, so it never scans for services or touches the user's settings.
+smoke_test() {
+  local port
+  port=$(free_port)
+  smoke_dir=$(mktemp -d "$state_dir/smoke.XXXXXX")
+  printf '%s\n' "$port" >"$smoke_dir/port"
+  printf '%s-%s\n' "$port" "$port" >"$smoke_dir/range"
+  log "smoke testing $available on port $port"
+  (
+    cd "$candidate"
+    exec env MIX_ENV=prod PHX_SERVER=true PORT="$port" \
+      LOCALWEBMONITOREX_CONFIG="$smoke_dir/port" \
+      LOCALWEBMONITOREX_RANGE_CONFIG="$smoke_dir/range" \
+      LOCALWEBMONITOREX_UPDATE_STATUS="$smoke_dir/status" \
+      "${server_command[@]}"
+  ) >&2 &
+  smoke_pid=$!
+  serves_revision "$port" "$smoke_seconds" "$available" "$smoke_pid" ||
+    { stop_smoke && discard_candidate smoke_failed; }
+  stop_smoke
+}
+
+stop_smoke() {
+  stop_tree "$smoke_pid"
+  smoke_pid=""
+  rm -rf "$smoke_dir"
+  smoke_dir=""
+}
+
+dashboard_port() {
+  local port
+  port=$(tr -d '[:space:]' <"$port_file" 2>/dev/null || true)
+  if [[ $port =~ ^[0-9]+$ ]] && ((port >= 1024 && port <= 65535)); then
+    echo "$port"
+  else
+    echo 4100
+  fi
+}
+
+point_install_at() {
+  ln -sfn "$1" "$install_link"
+}
+
+restart_agent() {
+  "$launchctl_command" kickstart -k "gui/$(id -u)/$agent_label"
+}
+
+switch_to_candidate() {
+  local previous port
+  previous=$(readlink "$install_link") || finish failed switch_failed
+  port=$(dashboard_port)
+  point_install_at "$candidate" || finish failed switch_failed
+  log "restarting $agent_label on $available"
+  if restart_agent && serves_revision "$port" "$health_seconds" "$available"; then
+    installed=$available
+    behind=0
+    return 0
+  fi
+  log "the new version did not answer on port $port; restoring $previous"
+  point_install_at "$previous"
+  restart_agent || log "could not restart $agent_label on $previous"
+  finish failed restart_failed
+}
+
+refresh_runner() {
+  local temporary="$state_dir/update-from-main.tmp.$$"
+  if ! install -m 755 "$candidate/bin/update-from-main" "$temporary" ||
+    ! mv -f "$temporary" "$state_dir/update-from-main"; then
+    log "could not refresh the updater runner"
+  fi
+}
+
+# Keeps the running version and the one before it for a manual rollback.
+prune_versions() {
+  local keep_current=$1 keep_previous=$2 directory
+  for directory in "$versions_dir"/*; do
+    [[ -d $directory && ! -L $directory ]] || continue
+    [[ $directory == "$keep_current" || $directory == "$keep_previous" ]] && continue
+    rm -rf "$directory"
+  done
+}
+
+main() {
+  local previous
+  acquire_lock
+  checked_at=$(date +%s)
+  read_installed
+  fetch_main
+  compare_with_main
+  build_candidate
+  smoke_test
+  previous=$(readlink "$install_link")
+  switch_to_candidate
+  phase=up_to_date
+  reason=""
+  write_status
+  refresh_runner
+  prune_versions "$candidate" "$previous"
+  log "updated to $available"
+}
+
+main "$@"
