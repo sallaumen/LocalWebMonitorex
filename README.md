@@ -92,7 +92,7 @@ The dashboard opens at the same `http://localhost:4100` address. If a screenshot
 ./bin/install-launch-agent
 ```
 
-The installer copies the app to `~/Library/Application Support/LocalWebMonitorex`, prepares production assets there, installs a user LaunchAgent, and starts it. This lets the background process run outside protected project folders such as Documents. It starts again at login. Re-run the installer after pulling project updates. To restart it after saving a new port or watched range in **Settings**:
+The installer builds the current commit into `~/Library/Application Support/LocalWebMonitorex-versions/<commit>`, points `~/Library/Application Support/LocalWebMonitorex` at it, installs a user LaunchAgent, and starts it. Running outside the project folder lets the background process work even when the checkout is in a protected folder such as Documents. It starts again at login. To restart it after saving a new port or watched range in **Settings**:
 
 ```bash
 launchctl kickstart -k gui/$(id -u)/com.localwebmonitorex
@@ -104,7 +104,27 @@ The log is at `~/Library/Logs/LocalWebMonitorex.log`. To stop and remove automat
 ./bin/uninstall-launch-agent
 ```
 
-Removing the LaunchAgent keeps the installed copy and your saved preferences.
+Removing the LaunchAgents keeps the installed copies and your saved preferences.
+
+#### Automatic updates
+
+The installer also adds `com.localwebmonitorex.updater`, which runs at login and then about once an hour. It never changes your source checkout. Each run:
+
+1. Fetches `main` from the checkout's `origin` (read over HTTPS) into a private repository in `~/Library/Application Support/LocalWebMonitorex-updater`.
+2. Compares it with the installed commit. If they match, it records that the copy is up to date.
+3. Exports the new commit into its own version directory and runs `bin/build-installation` there.
+4. Starts that build on a spare loopback port with throwaway settings and an empty watched range, and waits for it to serve its own commit.
+5. Points the installation at the new version and restarts `com.localwebmonitorex`. If the dashboard does not serve the new commit on your saved port within three minutes, it switches back and restarts the previous version.
+
+A failed fetch, build, smoke test, or restart keeps the current version running and is retried on the next run. The running version and the one before it are kept; older version directories are removed. If the installed commit is not on `main`, for example after installing from an unmerged branch, updates pause until you install from `main` again. A change to the LaunchAgent files themselves applies when you re-run the installer.
+
+**Settings → Updates** shows the installed commit, the last check, and whether the copy is up to date, behind `main` by some commits, or why the last update failed. Details are in `~/Library/Logs/LocalWebMonitorex-updater.log`. To check now:
+
+```bash
+launchctl kickstart gui/$(id -u)/com.localwebmonitorex.updater
+```
+
+Installations made before the updater existed keep their files in place: re-run `./bin/install-launch-agent` from an up-to-date `main` checkout once. The installer keeps the old copy as the previous version and turns on the hourly updater.
 
 ## Configuration
 
