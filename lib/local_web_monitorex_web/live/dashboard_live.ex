@@ -270,7 +270,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
           <div>
             <h1>Running services <span class="count">{length(@services)}</span></h1>
             <p>
-              HTTP and HTTPS servers on 127.0.0.1, ports {@range_start}–{@range_end}. Updates live.
+              HTTP and HTTPS servers on 127.0.0.1 in range {@range_start}–{@range_end}. Updates live.
             </p>
           </div>
           <div class="head-actions">

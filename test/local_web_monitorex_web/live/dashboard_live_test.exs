@@ -12,7 +12,8 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
     assert html =~ "LocalWebMonitorex"
     assert html =~ "localhost:#{Application.fetch_env!(:local_web_monitorex, :dashboard_port)}"
     assert html =~ "Running services"
-    assert html =~ "4000–4500"
+    # The release workflow's installed-dashboard smoke test greps for this text.
+    assert html =~ "in range 4000–4500"
     refute html =~ "Main port"
     refute html =~ "Visão geral"
   end
