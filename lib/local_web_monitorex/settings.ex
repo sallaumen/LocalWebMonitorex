@@ -3,7 +3,9 @@ defmodule LocalWebMonitorex.Settings do
 
   @default_port 4100
   @default_range 4000..4500
-  @max_range_size 1000
+  @port_space 1..65_535
+  @plain_digits ~r/\A\d+\z/
+  @grouped_digits ~r/\A\d{1,3}(?:[.,_ \x{00A0}\x{202F}]\d{3})+\z/u
 
   @spec path() :: String.t()
   def path, do: Application.fetch_env!(:local_web_monitorex, :settings_file)
@@ -45,8 +47,12 @@ defmodule LocalWebMonitorex.Settings do
     end
   end
 
+  @doc """
+  Saves an inclusive range inside 1..65535. Bounds may use grouped thousands,
+  such as `4.000` or `4,000`, because browsers and locales format them that way.
+  """
   @spec save_range(String.t() | integer(), String.t() | integer(), String.t()) ::
-          :ok | {:error, atom()}
+          :ok | {:error, :invalid_range_bound | :reversed_range | File.posix()}
   def save_range(first, last, path \\ range_path()) do
     with {:ok, range} <- parse_range(first, last),
          :ok <- File.mkdir_p(Path.dirname(path)),
@@ -71,25 +77,43 @@ defmodule LocalWebMonitorex.Settings do
 
   defp parse_range(first, last) do
     with {:ok, start_port} <- parse_bound(first),
-         {:ok, end_port} <- parse_bound(last),
-         true <- start_port <= end_port,
-         true <- end_port - start_port + 1 <= @max_range_size do
-      {:ok, start_port..end_port}
-    else
-      _ -> {:error, :invalid_range}
+         {:ok, end_port} <- parse_bound(last) do
+      ordered_range(start_port, end_port)
     end
   end
 
-  defp parse_bound(value) when is_integer(value) and value in 1..65_535, do: {:ok, value}
+  defp ordered_range(start_port, end_port) when start_port <= end_port,
+    do: {:ok, start_port..end_port}
+
+  defp ordered_range(_start_port, _end_port), do: {:error, :reversed_range}
+
+  defp parse_bound(value) when is_integer(value) and value in @port_space, do: {:ok, value}
 
   defp parse_bound(value) when is_binary(value) do
-    case Integer.parse(String.trim(value)) do
-      {port, ""} when port in 1..65_535 -> {:ok, port}
-      _ -> {:error, :invalid_range}
+    value
+    |> String.trim()
+    |> digits()
+    |> port_in_space()
+  end
+
+  defp parse_bound(_value), do: {:error, :invalid_range_bound}
+
+  defp digits(text) do
+    cond do
+      Regex.match?(@plain_digits, text) -> {:ok, text}
+      Regex.match?(@grouped_digits, text) -> {:ok, String.replace(text, ~r/\D/u, "")}
+      true -> :error
     end
   end
 
-  defp parse_bound(_value), do: {:error, :invalid_range}
+  defp port_in_space({:ok, text}) do
+    case String.to_integer(text) do
+      port when port in @port_space -> {:ok, port}
+      _port -> {:error, :invalid_range_bound}
+    end
+  end
+
+  defp port_in_space(:error), do: {:error, :invalid_range_bound}
 
   defp write_atomically(path, content) do
     temporary = "#{path}.tmp-#{System.unique_integer([:positive])}"
