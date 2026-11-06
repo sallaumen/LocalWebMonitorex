@@ -11,8 +11,9 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
 
     assert html =~ "LocalWebMonitorex"
     assert html =~ "localhost:#{Application.fetch_env!(:local_web_monitorex, :dashboard_port)}"
-    assert html =~ "Active ports"
-    assert html =~ "4000–4500"
+    assert html =~ "Running services"
+    # The release workflow's installed-dashboard smoke test greps for this text.
+    assert html =~ "in range 4000–4500"
     refute html =~ "Main port"
     refute html =~ "Visão geral"
   end
@@ -130,6 +131,8 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
     assert File.read!(path) == "4050-4080\n"
     assert has_element?(view, ~s(#range-start[value="4000.0"][aria-invalid="true"]))
     assert has_element?(view, ~s(#range-end[value="4500"]))
+    assert has_element?(view, ".settings-facts dd", "4050–4080")
+    refute has_element?(view, ".settings-facts dd", "4000.0")
   end
 
   test "saves ranges the browser accepts, including grouped and full-space values", %{
@@ -204,30 +207,7 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       }
     }
 
-    assigns = %{
-      services: [service],
-      previews: %{},
-      query: "",
-      scanning: false,
-      scan_progress: %{checked: 0, total: 100, scanning: false},
-      settings_open: false,
-      selected_service: nil,
-      stop_target: nil,
-      stop_task: nil,
-      notice: nil,
-      dashboard_port: 4100,
-      saved_port: 4100,
-      settings_file: "/tmp/localwebmonitorex/port",
-      range_start: 4000,
-      range_end: 4099,
-      range_start_input: 4000,
-      range_end_input: 4099,
-      range_file: "/tmp/localwebmonitorex/range",
-      range_error: nil,
-      range_saved: false,
-      port_error: nil,
-      port_saved: false
-    }
+    assigns = render_assigns(services: [service])
 
     html = render_component(&DashboardLive.render/1, assigns)
 
@@ -250,30 +230,7 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       }
     }
 
-    assigns = %{
-      services: [service],
-      previews: %{},
-      query: "",
-      scanning: false,
-      scan_progress: %{checked: 0, total: 100, scanning: false},
-      settings_open: false,
-      selected_service: nil,
-      stop_target: nil,
-      stop_task: nil,
-      notice: nil,
-      dashboard_port: 4100,
-      saved_port: 4100,
-      settings_file: "/tmp/localwebmonitorex/port",
-      range_start: 4000,
-      range_end: 4099,
-      range_start_input: 4000,
-      range_end_input: 4099,
-      range_file: "/tmp/localwebmonitorex/range",
-      range_error: nil,
-      range_saved: false,
-      port_error: nil,
-      port_saved: false
-    }
+    assigns = render_assigns(services: [service])
 
     html = render_component(&DashboardLive.render/1, assigns)
 
@@ -281,5 +238,117 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
     assert html =~ "50 MiB"
     assert html =~ "CPU"
     assert html =~ "—"
+  end
+
+  test "says a snapshot is unavailable after a failed capture", %{conn: conn} do
+    service = %Service{port: 4055, status: 200, scheme: "http", title: "Example"}
+    {:ok, view, _html} = live(conn, "/")
+
+    send(view.pid, {:services_updated, %{services: [service], checked_at: nil, scanning: false}})
+    assert has_element?(view, ".service-card", "Capturing snapshot")
+
+    send(view.pid, {:preview_failed, 4055})
+    assert has_element?(view, ".service-card", "Snapshot unavailable")
+    refute has_element?(view, ".service-card", "Capturing snapshot")
+
+    send(view.pid, {:preview_ready, 4055, 1_700_000_000_000})
+    refute has_element?(view, ".service-card", "Snapshot unavailable")
+
+    assert has_element?(
+             view,
+             "button[phx-click=open_preview][phx-value-port='4055']:not([disabled])"
+           )
+  end
+
+  test "reports the first scan as in progress instead of finding nothing", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+
+    send(view.pid, {:services_updated, %{services: [], checked_at: nil, scanning: true}})
+    assert has_element?(view, ".empty-state", "Scanning ports")
+    refute has_element?(view, ".empty-state", "No web servers found")
+
+    send(
+      view.pid,
+      {:services_updated, %{services: [], checked_at: DateTime.utc_now(), scanning: false}}
+    )
+
+    assert has_element?(view, ".empty-state", "No web servers found")
+  end
+
+  test "shows when the last scan finished and which ports are watched" do
+    html =
+      render_component(
+        &DashboardLive.render/1,
+        render_assigns(checked_at: ~U[2026-11-06 14:02:11Z], dashboard_port: 4050)
+      )
+
+    assert html =~ "Last scan"
+    assert html =~ ~r/\d{2}:\d{2}:\d{2}/
+    # 4000–4099 minus the dashboard's own port, matching the scan progress total.
+    assert html =~ "99 ports"
+    refute html =~ "100 ports ·"
+    assert html =~ "excludes :4050"
+  end
+
+  test "explains HTTP status, response time, and missing process details" do
+    service = %Service{port: 4005, status: 500, scheme: "http", response_ms: 18}
+    html = render_component(&DashboardLive.render/1, render_assigns(services: [service]))
+
+    assert html =~ "500 Internal Server Error"
+    assert html =~ "18 ms"
+    assert html =~ "No page title"
+    assert html =~ "Process details unavailable"
+  end
+
+  test "flags saved settings that only apply on the next start" do
+    html =
+      render_component(
+        &DashboardLive.render/1,
+        render_assigns(
+          settings_open: true,
+          saved_range_start: 5000,
+          saved_range_end: 5100,
+          saved_port: 4200
+        )
+      )
+
+    assert html =~ "5000–5100"
+    assert html =~ "Applies on next start"
+    assert html =~ "4200"
+  end
+
+  defp render_assigns(overrides) do
+    Map.merge(
+      %{
+        services: [],
+        previews: %{},
+        preview_failures: MapSet.new(),
+        checked_at: nil,
+        query: "",
+        scanning: false,
+        scan_progress: %{checked: 0, total: 100, scanning: false},
+        settings_open: false,
+        selected_service: nil,
+        stop_target: nil,
+        stop_task: nil,
+        notice: nil,
+        dashboard_port: 4100,
+        saved_port: 4100,
+        settings_file: "/tmp/localwebmonitorex/port",
+        range_start: 4000,
+        range_end: 4099,
+        saved_range_start: 4000,
+        saved_range_end: 4099,
+        range_start_input: 4000,
+        range_end_input: 4099,
+        range_file: "/tmp/localwebmonitorex/range",
+        range_error: nil,
+        range_saved: false,
+        port_error: nil,
+        port_saved: false,
+        update_status: %LocalWebMonitorex.UpdateStatus{}
+      },
+      Map.new(overrides)
+    )
   end
 end
