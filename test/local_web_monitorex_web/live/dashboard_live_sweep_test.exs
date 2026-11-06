@@ -65,6 +65,15 @@ defmodule LocalWebMonitorexWeb.DashboardLiveSweepTest do
     assert has_element?(view, ~s(#sweep-body a[href="http://localhost:8080"]))
   end
 
+  test "closes the open sweep panel with Escape", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("#sweep-panel button[aria-expanded]") |> render_click()
+
+    view |> element("#sweep-panel") |> render_keydown(%{"key" => "Escape"})
+
+    refute has_element?(view, "#sweep-body")
+  end
+
   test "lists listeners that answer only TCP with their process name", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
     findings = [%Finding{port: 64_120, http: false, process_name: "rapportd"}]

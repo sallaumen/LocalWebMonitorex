@@ -18,6 +18,8 @@ defmodule LocalWebMonitorexWeb.SweepPanel do
       id="sweep-panel"
       class={["sweep-panel", "sweep-#{@sweep.phase}", @open && "open"]}
       aria-label="Ports outside the watched range"
+      phx-window-keydown={@open && "close_sweep_panel"}
+      phx-key="Escape"
     >
       <button
         type="button"
@@ -28,7 +30,7 @@ defmodule LocalWebMonitorexWeb.SweepPanel do
       >
         <span class="sweep-dot" aria-hidden="true"></span>
         <span class="sweep-summary-label">Other ports</span>
-        <span :if={@sweep.findings != []} class="sweep-count">{length(@sweep.findings)}</span>
+        <span :if={@sweep.findings != []} class="badge sweep-count">{length(@sweep.findings)}</span>
         <span class="sweep-summary-state">{short_state(@sweep)}</span>
         <.icon name={if @open, do: "hero-chevron-down", else: "hero-chevron-up"} class="icon" />
       </button>
@@ -51,7 +53,7 @@ defmodule LocalWebMonitorexWeb.SweepPanel do
           <li :for={finding <- @sweep.findings}>
             <span class="sweep-port">{finding.port}</span>
             <span class="sweep-name" title={label(finding)}>{label(finding)}</span>
-            <span class={["sweep-kind", kind_class(finding)]}>{kind(finding)}</span>
+            <span class={["badge", kind_class(finding)]}>{kind(finding)}</span>
             <a
               :if={Finding.url(finding)}
               href={Finding.url(finding)}
@@ -72,7 +74,7 @@ defmodule LocalWebMonitorexWeb.SweepPanel do
         </p>
         <p :if={@error} class="sweep-error" role="alert">{@error}</p>
         <div class="sweep-footer">
-          <span>127.0.0.1 only · hourly, gently</span>
+          <span>127.0.0.1 only · hourly</span>
           <button
             type="button"
             role="switch"
@@ -89,9 +91,9 @@ defmodule LocalWebMonitorexWeb.SweepPanel do
     """
   end
 
-  defp short_state(%{phase: :off}), do: "Off"
-  defp short_state(%{phase: :sweeping} = sweep), do: "#{percent(sweep)}%"
-  defp short_state(%{next_pass_at: %DateTime{} = at}), do: "Next #{clock(at)}"
+  defp short_state(%{phase: :off}), do: "Sweep off"
+  defp short_state(%{phase: :sweeping} = sweep), do: "Sweeping · #{percent(sweep)}%"
+  defp short_state(%{next_pass_at: %DateTime{} = at}), do: "Next pass #{clock(at)}"
   defp short_state(_sweep), do: "Waiting"
 
   defp status(%{phase: :off}, range),
@@ -123,9 +125,9 @@ defmodule LocalWebMonitorexWeb.SweepPanel do
   defp kind(%Finding{http: true, status: status}), do: "HTTP #{status}"
   defp kind(%Finding{}), do: "TCP"
 
-  defp kind_class(%Finding{http: true, status: status}) when status >= 400, do: "warning"
-  defp kind_class(%Finding{http: true}), do: "http"
-  defp kind_class(%Finding{}), do: "tcp"
+  defp kind_class(%Finding{http: true, status: status}) when status >= 400, do: "badge-warn"
+  defp kind_class(%Finding{http: true}), do: "badge-ok"
+  defp kind_class(%Finding{}), do: "badge-muted"
 
   defp clock(datetime) do
     {_date, {hour, minute, _second}} =

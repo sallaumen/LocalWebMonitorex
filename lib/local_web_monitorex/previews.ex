@@ -6,7 +6,6 @@ defmodule LocalWebMonitorex.Previews do
   require Logger
 
   alias LocalWebMonitorex.Service
-  alias LocalWebMonitorex.CaptureRuntime
 
   @topic "previews"
   @refresh_ms 30_000
@@ -23,6 +22,10 @@ defmodule LocalWebMonitorex.Previews do
   @spec version(pos_integer()) :: integer() | nil
   def version(port), do: GenServer.call(__MODULE__, {:version, port})
 
+  @doc "True when the latest capture attempt for `port` failed and none has succeeded since."
+  @spec failed?(pos_integer()) :: boolean()
+  def failed?(port), do: GenServer.call(__MODULE__, {:failed?, port})
+
   @spec subscribe() :: :ok | {:error, term()}
   def subscribe, do: Phoenix.PubSub.subscribe(LocalWebMonitorex.PubSub, @topic)
 
@@ -36,7 +39,16 @@ defmodule LocalWebMonitorex.Previews do
       )
 
     File.mkdir_p!(dir)
-    {:ok, %{dir: dir, queue: :queue.new(), pending: MapSet.new(), active: nil, cache: %{}}}
+
+    {:ok,
+     %{
+       dir: dir,
+       queue: :queue.new(),
+       pending: MapSet.new(),
+       active: nil,
+       cache: %{},
+       failures: MapSet.new()
+     }}
   end
 
   @impl true
@@ -49,6 +61,9 @@ defmodule LocalWebMonitorex.Previews do
 
     {:reply, reply, state}
   end
+
+  def handle_call({:failed?, port}, _from, state),
+    do: {:reply, MapSet.member?(state.failures, port), state}
 
   def handle_call({:version, port}, _from, state) do
     version =
@@ -83,9 +98,8 @@ defmodule LocalWebMonitorex.Previews do
   end
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, %{active: {ref, port}} = state) do
-    Logger.warning("Preview worker stopped", port: port, reason: inspect(reason))
-    updated = %{state | active: nil, pending: MapSet.delete(state.pending, port)}
-    {:noreply, start_next(updated)}
+    updated = finish_capture(state, port, {:error, "worker stopped: #{inspect(reason)}"})
+    {:noreply, start_next(%{updated | active: nil})}
   end
 
   defp allowed?(port) when is_integer(port) do
@@ -111,7 +125,7 @@ defmodule LocalWebMonitorex.Previews do
 
         task =
           Task.Supervisor.async_nolink(LocalWebMonitorex.TaskSupervisor, fn ->
-            capture(service, path)
+            capturer().capture(service, path)
           end)
 
         %{state | queue: queue, active: {task.ref, service.port}}
@@ -129,26 +143,29 @@ defmodule LocalWebMonitorex.Previews do
     %{
       state
       | cache: Map.put(state.cache, port, {version, checked}),
-        pending: MapSet.delete(state.pending, port)
+        pending: MapSet.delete(state.pending, port),
+        failures: MapSet.delete(state.failures, port)
     }
   end
 
   defp finish_capture(state, port, {:error, reason}) do
     Logger.warning("Preview capture failed", port: port, reason: reason)
-    %{state | pending: MapSet.delete(state.pending, port)}
+    Phoenix.PubSub.broadcast(LocalWebMonitorex.PubSub, @topic, {:preview_failed, port})
+
+    %{
+      state
+      | pending: MapSet.delete(state.pending, port),
+        failures: MapSet.put(state.failures, port)
+    }
   end
 
-  defp capture(service, path) do
-    {node, script} = CaptureRuntime.paths()
-    url = "#{service.scheme}://127.0.0.1:#{service.port}/"
-
-    case System.cmd(node, [script, url, path], stderr_to_stdout: true) do
-      {_output, 0} -> :ok
-      {output, _status} -> {:error, String.slice(String.trim(output), 0, 200)}
-    end
-  rescue
-    error -> {:error, Exception.message(error)}
-  end
+  defp capturer,
+    do:
+      Application.get_env(
+        :local_web_monitorex,
+        :preview_capture,
+        LocalWebMonitorex.Previews.Browser
+      )
 
   defp image_path(dir, port), do: Path.join(dir, "#{port}.png")
 end
