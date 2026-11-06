@@ -88,4 +88,55 @@ defmodule LocalWebMonitorex.MonitorTest do
 
     assert GenServer.call(monitor, :snapshot).services == []
   end
+
+  defmodule SlowProbe do
+    @behaviour LocalWebMonitorex.PortProbe
+
+    @impl true
+    def probe(_port) do
+      :counters.add(:persistent_term.get({LocalWebMonitorex.MonitorTest, :calls}), 1, 1)
+      Process.sleep(300)
+      :closed
+    end
+  end
+
+  test "never starts a second scan while one is still running" do
+    calls = :counters.new(1, [])
+    :persistent_term.put({__MODULE__, :calls}, calls)
+    on_exit(fn -> :persistent_term.erase({__MODULE__, :calls}) end)
+    :ok = Phoenix.PubSub.subscribe(LocalWebMonitorex.PubSub, "services")
+
+    monitor =
+      start_supervised!(
+        {Monitor, name: :slow_monitor, ports: [4000], probe: SlowProbe, interval: 10}
+      )
+
+    assert_receive {:services_updated, %{scanning: true}}, 1_000
+    for _attempt <- 1..5, do: send(monitor, :scan)
+    GenServer.cast(monitor, :refresh)
+
+    assert_receive {:services_updated, %{scanning: false}}, 2_000
+    assert :counters.get(calls, 1) == 1
+  end
+
+  defmodule ClosedProbe do
+    @behaviour LocalWebMonitorex.PortProbe
+
+    @impl true
+    def probe(4100), do: raise("dashboard port was scanned")
+    def probe(_port), do: :closed
+  end
+
+  test "publishes scan progress for the watched ports, excluding the dashboard" do
+    :ok = Phoenix.PubSub.subscribe(LocalWebMonitorex.PubSub, "services")
+
+    monitor =
+      start_supervised!(
+        {Monitor,
+         name: :progress_monitor, ports: 4000..4199, probe: ClosedProbe, interval: 60_000}
+      )
+
+    assert_receive {:scan_progress, %{checked: 199, total: 199, scanning: false}}, 2_000
+    assert %{progress: %{checked: 199, total: 199}} = GenServer.call(monitor, :snapshot)
+  end
 end

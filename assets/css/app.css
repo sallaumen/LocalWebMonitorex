@@ -334,3 +334,17 @@ html[data-theme="dark"] .mobile-brand .brand-period { color:#d8f486; }
 html[data-theme="dark"] .mobile-brand .brand-mark span { box-shadow:0 0 0 3px #0e1712; }
 html[data-theme="dark"] ::selection { background:#d8f486; color:#102019; }
 html[data-theme="dark"] { scrollbar-color:#527159 #13251a; }
+
+/* Scan progress: one quiet line above the page head, so large ranges show where the scan is. */
+.scan-progress { display:grid; grid-template-columns:auto auto minmax(80px,1fr); align-items:center; gap:14px; min-height:46px; border-bottom:1px solid var(--line); color:#49654d; }
+.scan-progress-label { font:650 10px "SFMono-Regular",Consolas,monospace; letter-spacing:.12em; text-transform:uppercase; color:#526b58; white-space:nowrap; }
+.scan-progress-count { font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--ink); white-space:nowrap; }
+.scan-progress-bar { appearance:none; -webkit-appearance:none; width:100%; height:4px; border:0; border-radius:2px; background:#d8e0d5; color:#6b9c54; overflow:hidden; }
+.scan-progress-bar::-webkit-progress-bar { background:#d8e0d5; border-radius:2px; }
+.scan-progress-bar::-webkit-progress-value { background:#6b9c54; border-radius:2px; transition:width .25s; }
+.scan-progress-bar::-moz-progress-bar { background:#6b9c54; border-radius:2px; }
+@media (max-width:760px) { .scan-progress { grid-template-columns:auto 1fr; gap:6px 12px; padding:10px 0; } .scan-progress-bar { grid-column:1 / -1; } }
+html[data-theme="dark"] .scan-progress-label { color:#a2c5a4; }
+html[data-theme="dark"] .scan-progress-bar,html[data-theme="dark"] .scan-progress-bar::-webkit-progress-bar { background:#2a4134; }
+html[data-theme="dark"] .scan-progress-bar::-webkit-progress-value { background:#9ccf7f; }
+html[data-theme="dark"] .scan-progress-bar::-moz-progress-bar { background:#9ccf7f; }

@@ -118,9 +118,75 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
     assert render_submit(element(view, "form[phx-submit=save_range]"), %{
              "start" => "4080",
              "end" => "4050"
-           }) =~ "Choose a valid range"
+           }) =~ "The first port must not be after the last port."
 
     assert File.read!(path) == "4050-4080\n"
+
+    assert render_submit(element(view, "form[phx-submit=save_range]"), %{
+             "start" => "4000.0",
+             "end" => "4500"
+           }) =~ "Enter whole port numbers from 1 to 65535."
+
+    assert File.read!(path) == "4050-4080\n"
+    assert has_element?(view, ~s(#range-start[value="4000.0"][aria-invalid="true"]))
+    assert has_element?(view, ~s(#range-end[value="4500"]))
+  end
+
+  test "saves ranges the browser accepts, including grouped and full-space values", %{
+    conn: conn
+  } do
+    path =
+      Path.join(
+        System.tmp_dir!(),
+        "localwebmonitorex-range-#{System.unique_integer([:positive])}/range"
+      )
+
+    previous = Application.get_env(:local_web_monitorex, :range_settings_file)
+    Application.put_env(:local_web_monitorex, :range_settings_file, path)
+
+    on_exit(fn ->
+      Application.put_env(:local_web_monitorex, :range_settings_file, previous)
+      File.rm_rf!(Path.dirname(path))
+    end)
+
+    {:ok, view, _html} = live(conn, "/")
+    render_click(element(view, "button.rail-button"))
+
+    refute has_element?(view, "#range-settings input[type=number]")
+    assert has_element?(view, "#range-start[inputmode=numeric]")
+    assert has_element?(view, "#range-end[inputmode=numeric]")
+
+    for {first, last, saved} <- [
+          {"4.000", "4.500", "4000-4500\n"},
+          {"4000", "4500", "4000-4500\n"},
+          {"1", "65535", "1-65535\n"}
+        ] do
+      assert render_submit(element(view, "form[phx-submit=save_range]"), %{
+               "start" => first,
+               "end" => last
+             }) =~ "Saved. Restart"
+
+      assert File.read!(path) == saved
+    end
+
+    refute render(view) =~ "1,000"
+  end
+
+  test "shows how many ports the current scan has checked", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+
+    send(view.pid, {:scan_progress, %{checked: 1240, total: 61_535, scanning: true}})
+
+    assert has_element?(
+             view,
+             ~s(progress[max="61535"][value="1240"][aria-valuetext="1,240 of 61,535 ports scanned"])
+           )
+
+    assert render(view) =~ "Scanned 1,240 / 61,535"
+
+    send(view.pid, {:scan_progress, %{checked: 61_535, total: 61_535, scanning: false}})
+
+    assert render(view) =~ "Scanned 61,535 / 61,535"
   end
 
   test "renders a discovered service before its preview is ready" do
@@ -143,6 +209,7 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       previews: %{},
       query: "",
       scanning: false,
+      scan_progress: %{checked: 0, total: 100, scanning: false},
       settings_open: false,
       selected_service: nil,
       stop_target: nil,
@@ -153,8 +220,8 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       settings_file: "/tmp/localwebmonitorex/port",
       range_start: 4000,
       range_end: 4099,
-      saved_range_start: 4000,
-      saved_range_end: 4099,
+      range_start_input: 4000,
+      range_end_input: 4099,
       range_file: "/tmp/localwebmonitorex/range",
       range_error: nil,
       range_saved: false,
@@ -188,6 +255,7 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       previews: %{},
       query: "",
       scanning: false,
+      scan_progress: %{checked: 0, total: 100, scanning: false},
       settings_open: false,
       selected_service: nil,
       stop_target: nil,
@@ -198,8 +266,8 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       settings_file: "/tmp/localwebmonitorex/port",
       range_start: 4000,
       range_end: 4099,
-      saved_range_start: 4000,
-      saved_range_end: 4099,
+      range_start_input: 4000,
+      range_end_input: 4099,
       range_file: "/tmp/localwebmonitorex/range",
       range_error: nil,
       range_saved: false,
