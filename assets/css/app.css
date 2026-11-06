@@ -309,3 +309,14 @@ html[data-theme="dark"] .settings-input-row button,html[data-theme="dark"] .sett
 }
 @media (max-width:420px) { .scan-cell dd small { font-size:11px; } .stop-dialog { padding:20px; } .stop-dialog-actions { flex-direction:column-reverse; } .stop-dialog-actions button { width:100%; min-height:44px; } }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
+
+/* Scan progress (from #12), shown inside the Scanner cell of the scan strip. */
+.scan-progress { display:grid; grid-template-columns:1fr; gap:5px; margin-top:4px; }
+.scan-progress-label { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.scan-progress-count { font:600 12px/1.3 var(--mono); font-variant-numeric:tabular-nums; color:var(--text-2); white-space:nowrap; }
+.scan-progress-bar { appearance:none; -webkit-appearance:none; width:100%; height:4px; border:0; border-radius:2px; background:var(--border); color:var(--brand); overflow:hidden; }
+.scan-progress-bar::-webkit-progress-bar { background:var(--border); border-radius:2px; }
+.scan-progress-bar::-webkit-progress-value { background:var(--brand); border-radius:2px; transition:width .25s; }
+.scan-progress-bar::-moz-progress-bar { background:var(--brand); border-radius:2px; }
+.scan-progress.scanning .scan-progress-bar::-webkit-progress-value { background:var(--ok); }
+.scan-progress.scanning .scan-progress-bar::-moz-progress-bar { background:var(--ok); }

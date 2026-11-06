@@ -39,8 +39,7 @@ if config_env() != :test do
          {end_port, ""} <- Integer.parse(last),
          true <- start_port in 1..65_535,
          true <- end_port in 1..65_535,
-         true <- start_port <= end_port,
-         true <- end_port - start_port + 1 <= 1000 do
+         true <- start_port <= end_port do
       start_port..end_port
     else
       _ -> 4000..4500

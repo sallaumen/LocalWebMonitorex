@@ -11,6 +11,7 @@ defmodule LocalWebMonitorexWeb.DashboardComponents do
   attr :range_start, :integer, required: true
   attr :range_end, :integer, required: true
   attr :dashboard_port, :integer, required: true
+  slot :inner_block, doc: "scan progress shown under the scanner state"
 
   def scan_strip(assigns) do
     ~H"""
@@ -22,6 +23,7 @@ defmodule LocalWebMonitorexWeb.DashboardComponents do
             <span class={["scan-dot", @scanning && "scanning"]} aria-hidden="true"></span>
             {if @scanning, do: "Scanning ports…", else: "Watching"}
           </span>
+          {render_slot(@inner_block)}
           <small>Rescans 5 s after each scan finishes</small>
         </dd>
       </div>

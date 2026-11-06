@@ -44,16 +44,41 @@ defmodule LocalWebMonitorex.SettingsTest do
     assert Settings.read_range(path) == 4051..4081
   end
 
-  test "rejects invalid or excessive ranges without changing the saved value" do
+  test "accepts any range inside the port space, including grouped thousands" do
+    path = temporary_path("range")
+    on_exit(fn -> File.rm_rf!(Path.dirname(path)) end)
+
+    assert :ok = Settings.save_range("1", "65535", path)
+    assert Settings.read_range(path) == 1..65_535
+    assert :ok = Settings.save_range("4.000", "4,500", path)
+    assert Settings.read_range(path) == 4000..4500
+    assert :ok = Settings.save_range(" 4 000 ", "4500", path)
+    assert Settings.read_range(path) == 4000..4500
+  end
+
+  test "rejects invalid ranges without changing the saved value" do
     path = temporary_path("range")
     on_exit(fn -> File.rm_rf!(Path.dirname(path)) end)
     :ok = Settings.save_range(4000, 4099, path)
 
-    assert {:error, :invalid_range} = Settings.save_range("4100", "4000", path)
-    assert {:error, :invalid_range} = Settings.save_range("1", "1001", path)
-    assert {:error, :invalid_range} = Settings.save_range("0", "10", path)
-    assert {:error, :invalid_range} = Settings.save_range("abc", "4099", path)
+    assert {:error, :reversed_range} = Settings.save_range("4100", "4000", path)
+
+    for {first, last} <-
+          [{"0", "10"}, {"abc", "4099"}, {"4000.0", "4099"}, {"4e3", "4099"}] ++
+            [{"4.5", "4099"}, {"1", "70000"}, {"", "4099"}] do
+      assert {:error, :invalid_range_bound} = Settings.save_range(first, last, path)
+    end
+
     assert Settings.read_range(path) == 4000..4099
+  end
+
+  test "reads a saved full-port-space range" do
+    path = temporary_path("range")
+    on_exit(fn -> File.rm_rf!(Path.dirname(path)) end)
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, "1-65535\n")
+
+    assert Settings.read_range(path) == 1..65_535
   end
 
   defp temporary_path(filename \\ "port") do

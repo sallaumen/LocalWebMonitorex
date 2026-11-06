@@ -1,5 +1,10 @@
 defmodule LocalWebMonitorex.Monitor do
-  @moduledoc "Publishes the current set of local web services."
+  @moduledoc """
+  Publishes the current set of local web services and the progress of each scan.
+
+  Only one scan runs at a time. The next scan is scheduled after the current one
+  finishes, so a scan that outlasts the interval never overlaps another one.
+  """
 
   use GenServer
 
@@ -18,6 +23,16 @@ defmodule LocalWebMonitorex.Monitor do
   @spec refresh() :: :ok
   def refresh, do: GenServer.cast(__MODULE__, :refresh)
 
+  @typedoc "How many watched ports the latest scan has checked."
+  @type progress :: %{
+          checked: non_neg_integer(),
+          total: non_neg_integer(),
+          scanning: boolean()
+        }
+
+  @doc """
+  Subscribes to `{:services_updated, snapshot}` and `{:scan_progress, progress}`.
+  """
   @spec subscribe() :: :ok | {:error, term()}
   def subscribe, do: Phoenix.PubSub.subscribe(LocalWebMonitorex.PubSub, @topic)
 
@@ -32,8 +47,13 @@ defmodule LocalWebMonitorex.Monitor do
         Application.get_env(:local_web_monitorex, :monitor_ports, 4000..4500)
       )
 
+    ports = Enum.reject(configured_ports, &(&1 == dashboard_port))
+
     state = %{
-      ports: Enum.reject(configured_ports, &(&1 == dashboard_port)),
+      ports: ports,
+      total: length(ports),
+      checked: 0,
+      scan_id: nil,
       probe: Keyword.get(opts, :probe, LocalWebMonitorex.PortProbe.Http),
       inspector: Keyword.get(opts, :inspector, LocalWebMonitorex.ProcessInspector.System),
       interval: Keyword.get(opts, :interval, 5_000),
@@ -48,8 +68,7 @@ defmodule LocalWebMonitorex.Monitor do
   end
 
   @impl true
-  def handle_call(:snapshot, _from, state),
-    do: {:reply, Map.take(state, [:services, :checked_at, :scanning]), state}
+  def handle_call(:snapshot, _from, state), do: {:reply, snapshot(state), state}
 
   @impl true
   def handle_cast(:refresh, state) do
@@ -61,17 +80,24 @@ defmodule LocalWebMonitorex.Monitor do
   def handle_info(:scan, %{scanning: true} = state), do: {:noreply, state}
 
   def handle_info(:scan, state) do
-    task =
-      Task.Supervisor.async_nolink(LocalWebMonitorex.TaskSupervisor, fn ->
-        state.ports
-        |> Scanner.scan(state.probe)
-        |> ProcessInspector.enrich(state.inspector)
-      end)
+    scan_id = make_ref()
 
-    updated = %{state | scanning: true, task_ref: task.ref}
+    task =
+      Task.Supervisor.async_nolink(LocalWebMonitorex.TaskSupervisor, scan_job(state, scan_id))
+
+    updated = %{state | scanning: true, task_ref: task.ref, scan_id: scan_id, checked: 0}
     publish(updated)
+    publish_progress(updated)
     {:noreply, updated}
   end
+
+  def handle_info({:scan_progress, scan_id, checked}, %{scan_id: scan_id} = state) do
+    updated = %{state | checked: checked}
+    publish_progress(updated)
+    {:noreply, updated}
+  end
+
+  def handle_info({:scan_progress, _stale_scan, _checked}, state), do: {:noreply, state}
 
   def handle_info({ref, services}, %{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
@@ -81,23 +107,49 @@ defmodule LocalWebMonitorex.Monitor do
       | services: services,
         checked_at: DateTime.utc_now(),
         scanning: false,
-        task_ref: nil
+        task_ref: nil,
+        scan_id: nil,
+        checked: state.total
     }
 
     publish(updated)
+    publish_progress(updated)
     Process.send_after(self(), :scan, state.interval)
     {:noreply, updated}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, _reason}, %{task_ref: ref} = state) do
-    updated = %{state | scanning: false, task_ref: nil}
+    updated = %{state | scanning: false, task_ref: nil, scan_id: nil}
     publish(updated)
+    publish_progress(updated)
     Process.send_after(self(), :scan, state.interval)
     {:noreply, updated}
   end
 
-  defp publish(state) do
-    snapshot = Map.take(state, [:services, :checked_at, :scanning])
-    Phoenix.PubSub.broadcast(LocalWebMonitorex.PubSub, @topic, {:services_updated, snapshot})
+  defp scan_job(state, scan_id) do
+    monitor = self()
+    on_progress = &send(monitor, {:scan_progress, scan_id, &1})
+
+    fn ->
+      state.ports
+      |> Scanner.scan(state.probe, on_progress: on_progress)
+      |> ProcessInspector.enrich(state.inspector)
+    end
   end
+
+  defp snapshot(state) do
+    state
+    |> Map.take([:services, :checked_at, :scanning])
+    |> Map.put(:progress, progress(state))
+  end
+
+  defp progress(state),
+    do: %{checked: state.checked, total: state.total, scanning: state.scanning}
+
+  defp publish(state), do: broadcast({:services_updated, snapshot(state)})
+
+  defp publish_progress(state), do: broadcast({:scan_progress, progress(state)})
+
+  defp broadcast(message),
+    do: Phoenix.PubSub.broadcast(LocalWebMonitorex.PubSub, @topic, message)
 end

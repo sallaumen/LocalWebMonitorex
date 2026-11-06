@@ -2,6 +2,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
   use LocalWebMonitorexWeb, :live_view
 
   import LocalWebMonitorexWeb.DashboardComponents
+  import LocalWebMonitorexWeb.ScanProgress
   import LocalWebMonitorexWeb.StopDialog
 
   alias LocalWebMonitorex.Monitor
@@ -45,6 +46,8 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
      |> assign(:range_file, Settings.range_path())
      |> assign(:saved_range_start, saved_range.first)
      |> assign(:saved_range_end, saved_range.last)
+     |> assign(:range_start_input, saved_range.first)
+     |> assign(:range_end_input, saved_range.last)
      |> assign(:range_error, nil)
      |> assign(:range_saved, false)
      |> assign(:dashboard_port, Application.get_env(:local_web_monitorex, :dashboard_port, 4100))
@@ -52,6 +55,7 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
      |> assign(:range_end, range_end)
      |> assign(:previews, preview_versions(snapshot.services))
      |> assign(:preview_failures, preview_failures(snapshot.services))
+     |> assign(:scan_progress, snapshot.progress)
      |> assign_snapshot(snapshot)}
   end
 
@@ -152,13 +156,17 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
          socket
          |> assign(:saved_range_start, saved_range.first)
          |> assign(:saved_range_end, saved_range.last)
+         |> assign(:range_start_input, saved_range.first)
+         |> assign(:range_end_input, saved_range.last)
          |> assign(:range_error, nil)
          |> assign(:range_saved, true)}
 
-      {:error, :invalid_range} ->
+      {:error, reason} when reason in [:invalid_range_bound, :reversed_range] ->
         {:noreply,
          socket
-         |> assign(:range_error, "Choose a valid range of up to 1,000 ports (1–65535).")
+         |> assign(:range_start_input, first)
+         |> assign(:range_end_input, last)
+         |> assign(:range_error, range_error(reason))
          |> assign(:range_saved, false)}
 
       {:error, _reason} ->
@@ -181,6 +189,10 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
        current_selection(socket.assigns.selected_service, snapshot.services)
      )
      |> assign(:previews, Map.merge(socket.assigns.previews, preview_versions(snapshot.services)))}
+  end
+
+  def handle_info({:scan_progress, progress}, socket) do
+    {:noreply, assign(socket, :scan_progress, progress)}
   end
 
   def handle_info({ref, result}, %{assigns: %{stop_task: ref}} = socket) do
@@ -294,7 +306,9 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
           range_start={@range_start}
           range_end={@range_end}
           dashboard_port={@dashboard_port}
-        />
+        >
+          <.scan_progress progress={@scan_progress} />
+        </.scan_strip>
 
         <section class="services-section" aria-labelledby="services-title">
           <div class="toolbar">
@@ -514,18 +528,22 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
               </span>
             </dd>
           </dl>
-          <p>The dashboard port is always excluded from the scan.</p>
+          <p>
+            Choose any range from 1 to 65535. The dashboard port is always excluded from the scan.
+          </p>
           <form id="range-settings" phx-submit="save_range">
             <div class="settings-range-fields">
               <div>
                 <label for="range-start">From</label>
                 <input
                   id="range-start"
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="off"
                   name="start"
-                  value={@saved_range_start}
-                  min="1"
-                  max="65535"
+                  value={@range_start_input}
+                  aria-invalid={@range_error && "true"}
+                  aria-describedby={@range_error && "range-error"}
                   required
                 />
               </div>
@@ -534,17 +552,21 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
                 <label for="range-end">To</label>
                 <input
                   id="range-end"
-                  type="number"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="off"
                   name="end"
-                  value={@saved_range_end}
-                  min="1"
-                  max="65535"
+                  value={@range_end_input}
+                  aria-invalid={@range_error && "true"}
+                  aria-describedby={@range_error && "range-error"}
                   required
                 />
               </div>
             </div>
             <button type="submit" class="settings-range-save">Save range</button>
-            <p :if={@range_error} class="settings-error" role="alert">{@range_error}</p>
+            <p :if={@range_error} id="range-error" class="settings-error" role="alert">
+              {@range_error}
+            </p>
             <p :if={@range_saved} class="settings-success" role="status">
               Saved. Restart LocalWebMonitorex to use the new range.
             </p>
@@ -613,6 +635,9 @@ defmodule LocalWebMonitorexWeb.DashboardLive do
     |> assign(:stop_target, nil)
     |> assign(:notice, %{kind: :error, text: stop_error(reason)})
   end
+
+  defp range_error(:invalid_range_bound), do: "Enter whole port numbers from 1 to 65535."
+  defp range_error(:reversed_range), do: "The first port must not be after the last port."
 
   defp notice_role(:error), do: "alert"
   defp notice_role(:info), do: "status"
