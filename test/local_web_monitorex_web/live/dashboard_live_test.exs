@@ -345,7 +345,8 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
         range_error: nil,
         range_saved: false,
         port_error: nil,
-        port_saved: false
+        port_saved: false,
+        update_status: %LocalWebMonitorex.UpdateStatus{}
       },
       Map.new(overrides)
     )

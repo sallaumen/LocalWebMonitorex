@@ -309,6 +309,14 @@ html[data-theme="dark"] .settings-input-row button,html[data-theme="dark"] .sett
 }
 @media (max-width:420px) { .scan-cell dd small { font-size:11px; } .stop-dialog { padding:20px; } .stop-dialog-actions { flex-direction:column-reverse; } .stop-dialog-actions button { width:100%; min-height:44px; } }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
+/* Update status (from #13), styled like the other settings sections. */
+.settings-updates { margin-top:22px; padding-top:20px; border-top:1px solid var(--border); }
+.settings-updates h3 { margin:0; font-size:15px; }
+.settings-updates-summary { margin:4px 0 0; color:var(--text-2); font-size:13px; font-weight:600; line-height:1.5; }
+.settings-updates-summary.failed { color:var(--danger); }
+.settings-updates dl { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 14px; margin:12px 0 0; font-size:13px; }
+.settings-updates dt { color:var(--text-3); }
+.settings-updates dd { margin:0; min-width:0; overflow-wrap:anywhere; font:600 13px var(--mono); }
 
 /* Scan progress (from #12), shown inside the Scanner cell of the scan strip. */
 .scan-progress { display:grid; grid-template-columns:1fr; gap:5px; margin-top:4px; }
