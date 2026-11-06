@@ -226,7 +226,19 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       range_error: nil,
       range_saved: false,
       port_error: nil,
-      port_saved: false
+      port_saved: false,
+      range_hint: nil,
+      sweep: %{
+        enabled: false,
+        phase: :off,
+        checked: 0,
+        total: 0,
+        findings: [],
+        last_pass_at: nil,
+        next_pass_at: nil
+      },
+      sweep_open: false,
+      sweep_error: nil
     }
 
     html = render_component(&DashboardLive.render/1, assigns)
@@ -272,7 +284,19 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
       range_error: nil,
       range_saved: false,
       port_error: nil,
-      port_saved: false
+      port_saved: false,
+      range_hint: nil,
+      sweep: %{
+        enabled: false,
+        phase: :off,
+        checked: 0,
+        total: 0,
+        findings: [],
+        last_pass_at: nil,
+        next_pass_at: nil
+      },
+      sweep_open: false,
+      sweep_error: nil
     }
 
     html = render_component(&DashboardLive.render/1, assigns)

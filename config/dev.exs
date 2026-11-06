@@ -55,6 +55,9 @@ config :local_web_monitorex, LocalWebMonitorexWeb.Endpoint,
     ]
   ]
 
+# Start the first wide sweep soon after boot while developing.
+config :local_web_monitorex, :sweeper, start_delay: 5_000
+
 # Enable dev routes for dashboard and mailbox
 config :local_web_monitorex, dev_routes: true
 

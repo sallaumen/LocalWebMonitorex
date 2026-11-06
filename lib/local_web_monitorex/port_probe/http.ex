@@ -7,22 +7,38 @@ defmodule LocalWebMonitorex.PortProbe.Http do
 
   @impl true
   def probe(port) when is_integer(port) and port > 0 and port < 65_536 do
-    with {:ok, socket} <- :gen_tcp.connect({127, 0, 0, 1}, port, [:binary, active: false], 200) do
-      :ok = :gen_tcp.close(socket)
+    case accepts_tcp?(port) do
+      true -> probe_http(port)
+      false -> :closed
+    end
+  end
 
-      case request(port, "http") do
-        {:ok, response, elapsed} -> {:ok, service(port, "http", response, elapsed)}
-        {:error, _reason} -> probe_https(port)
-      end
-    else
-      {:error, _reason} -> :closed
+  # A loopback connection to a free port in the ephemeral range can connect to
+  # itself when the kernel picks that same port as the source. That is not a
+  # listener, so it counts as closed.
+  defp accepts_tcp?(port) do
+    case :gen_tcp.connect({127, 0, 0, 1}, port, [:binary, active: false], 200) do
+      {:ok, socket} ->
+        self_connected = match?({:ok, {_address, ^port}}, :inet.sockname(socket))
+        :ok = :gen_tcp.close(socket)
+        not self_connected
+
+      {:error, _reason} ->
+        false
+    end
+  end
+
+  defp probe_http(port) do
+    case request(port, "http") do
+      {:ok, response, elapsed} -> {:ok, service(port, "http", response, elapsed)}
+      {:error, _reason} -> probe_https(port)
     end
   end
 
   defp probe_https(port) do
     case request(port, "https") do
       {:ok, response, elapsed} -> {:ok, service(port, "https", response, elapsed)}
-      {:error, _reason} -> :closed
+      {:error, _reason} -> :tcp_only
     end
   end
 

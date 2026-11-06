@@ -30,6 +30,25 @@ defmodule LocalWebMonitorex.PortProbe.HttpTest do
     assert Http.probe(port) == :closed
   end
 
+  test "reports a listener that accepts TCP but does not answer HTTP" do
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true, ip: {127, 0, 0, 1}])
+
+    {:ok, {_address, port}} = :inet.sockname(listener)
+    closer = spawn_link(fn -> close_every_connection(listener) end)
+
+    assert Http.probe(port) == :tcp_only
+    Process.unlink(closer)
+    Process.exit(closer, :kill)
+    :gen_tcp.close(listener)
+  end
+
+  defp close_every_connection(listener) do
+    {:ok, socket} = :gen_tcp.accept(listener)
+    :gen_tcp.close(socket)
+    close_every_connection(listener)
+  end
+
   defp start_server(delay_ms) do
     {:ok, listener} =
       :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true, ip: {127, 0, 0, 1}])

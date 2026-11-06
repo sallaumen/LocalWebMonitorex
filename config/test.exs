@@ -2,6 +2,15 @@ import Config
 
 config :local_web_monitorex, monitor_ports: []
 
+# The application's wide sweep stays off in tests and only checks a few
+# closed ports when a test turns it on.
+config :local_web_monitorex, :sweeper,
+  enabled: false,
+  ports: 1..8,
+  start_delay: 0,
+  batch_pause: 10,
+  probe: LocalWebMonitorex.Test.ClosedProbe
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :local_web_monitorex, LocalWebMonitorexWeb.Endpoint,

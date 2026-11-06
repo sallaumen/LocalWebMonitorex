@@ -15,10 +15,11 @@ These rules carry the applicable general quality standards from Forrozin. Its do
 
 ## Boundaries
 
-- `PortProbe` and `ProcessInspector` are swappable discovery boundaries. `ProcessInspector.System` selects the macOS, Linux, or Windows adapter. `Scanner` owns bounded concurrency; `Monitor` owns scheduling and broadcasts; `Previews` owns screenshot work. LiveViews call those public APIs.
-- Never scan outside the configured range, except a browser screenshot's local asset requests. The dashboard port excludes itself from discovery.
+- `PortProbe` and `ProcessInspector` are swappable discovery boundaries. `ProcessInspector.System` selects the macOS, Linux, or Windows adapter. `Scanner` owns bounded concurrency; `Monitor` owns scheduling and broadcasts; `Previews` owns screenshot work; `Sweeper` owns the wide sweep. LiveViews call those public APIs.
+- `Monitor` and `Scanner` never probe outside the configured range, and previews never request anything but local addresses. The dashboard port excludes itself from discovery.
+- `Sweeper` is the one approved exception, a product decision by the owner: a slow background sweep of `127.0.0.1` ports 1–65535 that skips the watched range and the dashboard port. It stays loopback-only, probes in small paced batches with fixed low concurrency and short timeouts, waits a long interval between passes, takes no screenshots, and stops at once when its switch is turned off. Do not raise its rate, widen it beyond loopback, or add work per finding without a new product decision.
 - Keep the Phoenix endpoint bound to `127.0.0.1`; preview navigation may use only local HTTP(S) addresses.
-- The port and watched-range preferences live in separate local files. Validate before writing and apply them on the next start.
+- The port, watched-range and sweep preferences live in separate local files. Validate before writing. The port and range apply on the next start; the sweep switch applies immediately.
 
 ## Validation
 

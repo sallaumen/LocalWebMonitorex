@@ -194,6 +194,7 @@ smoke_test() {
   smoke_dir=$(mktemp -d "$state_dir/smoke.XXXXXX")
   printf '%s\n' "$port" >"$smoke_dir/port"
   printf '%s-%s\n' "$port" "$port" >"$smoke_dir/range"
+  printf 'off\n' >"$smoke_dir/sweep"
   log "smoke testing $available on port $port"
   (
     cd "$candidate"
