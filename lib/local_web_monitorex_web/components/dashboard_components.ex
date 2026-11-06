@@ -253,14 +253,15 @@ defmodule LocalWebMonitorexWeb.DashboardComponents do
     IO.iodata_to_binary(:io_lib.format("~2..0B:~2..0B:~2..0B", [hour, minute, second]))
   end
 
-  @doc "Describes the watched range size and whether the dashboard port is excluded from it."
+  @doc "Describes how many watched ports are scanned and whether the dashboard port is excluded."
   @spec range_caption(integer(), integer(), integer()) :: String.t()
   def range_caption(first, last, dashboard_port) when dashboard_port in first..last//1,
-    do: "#{port_count(first, last)} · excludes :#{dashboard_port} (this dashboard)"
+    do: "#{port_count(last - first)} · excludes :#{dashboard_port} (this dashboard)"
 
-  def range_caption(first, last, _dashboard_port), do: port_count(first, last)
+  def range_caption(first, last, _dashboard_port), do: port_count(last - first + 1)
 
-  defp port_count(first, last), do: "#{last - first + 1} ports"
+  defp port_count(1), do: "1 port"
+  defp port_count(count), do: "#{LocalWebMonitorexWeb.ScanProgress.format_count(count)} ports"
 
   defp found_label(nil, _found), do: "First scan in progress"
   defp found_label(_checked_at, 1), do: "1 server answered"

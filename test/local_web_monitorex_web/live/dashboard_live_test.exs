@@ -284,7 +284,9 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
 
     assert html =~ "Last scan"
     assert html =~ ~r/\d{2}:\d{2}:\d{2}/
-    assert html =~ "100 ports"
+    # 4000–4099 minus the dashboard's own port, matching the scan progress total.
+    assert html =~ "99 ports"
+    refute html =~ "100 ports ·"
     assert html =~ "excludes :4050"
   end
 
