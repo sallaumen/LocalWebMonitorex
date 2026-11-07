@@ -12,19 +12,20 @@ defmodule LocalWebMonitorex.SweeperTest do
 
     @impl true
     def probe(port) do
-      record(port)
-      Process.sleep(:persistent_term.get({LocalWebMonitorex.SweeperTest, :delay}, 0))
+      %{calls: calls, owner: owner, delay: delay, open: open} = config()
+      Agent.update(calls, &[port | &1])
+      send(owner, {:probe_started, port})
+      Process.sleep(delay)
+      send(owner, {:probe_finished, port})
 
-      case Map.get(:persistent_term.get({LocalWebMonitorex.SweeperTest, :open}), port) do
+      case Map.get(open, port) do
         :http -> {:ok, %Service{port: port, scheme: "http", status: 200, title: "Docs"}}
         :tcp -> :tcp_only
         nil -> :closed
       end
     end
 
-    defp record(port) do
-      Agent.update(:persistent_term.get({LocalWebMonitorex.SweeperTest, :calls}), &[port | &1])
-    end
+    defp config, do: :persistent_term.get(LocalWebMonitorex.SweeperTest)
   end
 
   defmodule Inspector do
@@ -38,17 +39,19 @@ defmodule LocalWebMonitorex.SweeperTest do
     end
   end
 
+  # The recorder starts before every sweeper, so ExUnit stops each sweeper first.
   setup do
-    {:ok, calls} = Agent.start_link(fn -> [] end)
-    :persistent_term.put({__MODULE__, :calls}, calls)
-    :persistent_term.put({__MODULE__, :open}, %{})
-
-    on_exit(fn ->
-      for key <- [:calls, :open, :delay], do: :persistent_term.erase({__MODULE__, key})
-    end)
+    calls = start_supervised!({Agent, fn -> [] end})
+    probe_config(calls: calls, owner: self(), delay: 0, open: %{})
+    on_exit(fn -> :persistent_term.erase(__MODULE__) end)
 
     :ok = Sweeper.subscribe()
     {:ok, calls: calls}
+  end
+
+  defp probe_config(changes) do
+    current = :persistent_term.get(__MODULE__, %{})
+    :persistent_term.put(__MODULE__, Map.merge(current, Map.new(changes)))
   end
 
   defp start_sweeper(opts) do
@@ -70,7 +73,7 @@ defmodule LocalWebMonitorex.SweeperTest do
 
   defp probed(calls), do: calls |> Agent.get(& &1) |> Enum.sort()
 
-  defp open_ports(ports), do: :persistent_term.put({__MODULE__, :open}, ports)
+  defp open_ports(ports), do: probe_config(open: ports)
 
   test "sweeps only ports outside the watched range and the dashboard port", %{calls: calls} do
     start_sweeper(ports: 1..20, watched_ports: 5..10, dashboard_port: 15)
@@ -80,14 +83,14 @@ defmodule LocalWebMonitorex.SweeperTest do
   end
 
   test "records TCP and HTTP listeners with their process names" do
-    open_ports(%{8080 => :http, 9000 => :tcp})
-    sweeper = start_sweeper(ports: 8075..9005)
+    open_ports(%{8080 => :http, 8082 => :tcp})
+    sweeper = start_sweeper(ports: 8079..8083)
 
     assert_receive {:sweep_updated, %{phase: :waiting, findings: findings}}, 2_000
 
     assert [
              %Finding{port: 8080, http: true, status: 200, process_name: "python3"},
-             %Finding{port: 9000, http: false, status: nil, process_name: nil}
+             %Finding{port: 8082, http: false, status: nil, process_name: nil}
            ] = findings
 
     assert %{last_pass_at: %DateTime{}, next_pass_at: %DateTime{}} = Sweeper.snapshot(sweeper)
@@ -111,16 +114,16 @@ defmodule LocalWebMonitorex.SweeperTest do
   end
 
   test "pauses between batches so a pass never bursts", %{calls: calls} do
-    start_sweeper(ports: 1..12, batch_size: 4, batch_pause: 200)
+    start_sweeper(ports: 1..12, batch_size: 4, batch_pause: 60_000)
 
     assert_receive {:sweep_updated, %{phase: :sweeping, checked: 4}}, 2_000
-    Process.sleep(100)
-    assert length(probed(calls)) == 4
+    Process.sleep(300)
+    assert probed(calls) == [1, 2, 3, 4]
   end
 
   test "stops immediately when turned off and starts again when turned on", %{calls: calls} do
     path = sweep_path()
-    :persistent_term.put({__MODULE__, :delay}, 100)
+    probe_config(delay: 100)
     open_ports(%{2 => :tcp})
     sweeper = start_sweeper(ports: 1..400, batch_size: 2)
 
@@ -136,6 +139,16 @@ defmodule LocalWebMonitorex.SweeperTest do
     assert :ok = Sweeper.set_enabled(true, sweeper)
     assert Settings.read_sweep(path) == true
     assert_receive {:sweep_updated, %{enabled: true, phase: :sweeping, checked: 2}}, 2_000
+  end
+
+  test "stopping the sweeper also stops the probes it started" do
+    probe_config(delay: 300)
+    start_sweeper(ports: 1..4)
+
+    assert_receive {:probe_started, _port}, 1_000
+    :ok = stop_supervised(Sweeper)
+
+    refute_receive {:probe_finished, _port}, 600
   end
 
   test "does not sweep when the switch is off at start", %{calls: calls} do

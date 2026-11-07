@@ -77,6 +77,8 @@ defmodule LocalWebMonitorex.Sweeper do
 
   @impl true
   def init(opts) do
+    # Trapping exits makes the supervisor's shutdown run terminate/2, which ends a running batch.
+    Process.flag(:trap_exit, true)
     config = @defaults |> Keyword.merge(opts) |> Map.new()
     excluded = excluded_ports(opts)
     enabled = Keyword.get_lazy(opts, :enabled, &Settings.read_sweep/0)
@@ -150,6 +152,9 @@ defmodule LocalWebMonitorex.Sweeper do
     do: {:noreply, finish_batch(state, [])}
 
   def handle_info(_stale, state), do: {:noreply, state}
+
+  @impl true
+  def terminate(_reason, state), do: shutdown_task(state.task)
 
   defp run_batch(state) do
     {ports, cursor} =
@@ -225,8 +230,15 @@ defmodule LocalWebMonitorex.Sweeper do
     %{state | phase: :waiting, next_pass_at: DateTime.add(now(), delay, :millisecond)}
   end
 
+  defp shutdown_task(nil), do: :ok
+
+  defp shutdown_task(task) do
+    Task.shutdown(task, :brutal_kill)
+    :ok
+  end
+
   defp stop(state) do
-    if state.task, do: Task.shutdown(state.task, :brutal_kill)
+    shutdown_task(state.task)
 
     %{
       state
