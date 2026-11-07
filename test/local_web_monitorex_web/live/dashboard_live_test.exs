@@ -346,7 +346,19 @@ defmodule LocalWebMonitorexWeb.DashboardLiveTest do
         range_saved: false,
         port_error: nil,
         port_saved: false,
-        update_status: %LocalWebMonitorex.UpdateStatus{}
+        update_status: %LocalWebMonitorex.UpdateStatus{},
+        range_hint: nil,
+        sweep: %{
+          enabled: false,
+          phase: :off,
+          checked: 0,
+          total: 0,
+          findings: [],
+          last_pass_at: nil,
+          next_pass_at: nil
+        },
+        sweep_open: false,
+        sweep_error: nil
       },
       Map.new(overrides)
     )

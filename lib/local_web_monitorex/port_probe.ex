@@ -1,5 +1,12 @@
 defmodule LocalWebMonitorex.PortProbe do
-  @moduledoc "Contract for checking whether a local port serves HTTP."
+  @moduledoc """
+  Contract for checking a local port.
 
-  @callback probe(pos_integer()) :: {:ok, LocalWebMonitorex.Service.t()} | :closed
+  A probe returns the HTTP(S) service on the port, `:tcp_only` when the port
+  accepts TCP connections but answers neither HTTP nor HTTPS, or `:closed`.
+  """
+
+  @type result :: {:ok, LocalWebMonitorex.Service.t()} | :tcp_only | :closed
+
+  @callback probe(pos_integer()) :: result()
 end

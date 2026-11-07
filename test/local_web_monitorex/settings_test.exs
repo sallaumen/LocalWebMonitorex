@@ -81,6 +81,43 @@ defmodule LocalWebMonitorex.SettingsTest do
     assert Settings.read_range(path) == 1..65_535
   end
 
+  test "keeps the wide sweep on when no sweep preference exists" do
+    assert Settings.read_sweep(temporary_path("sweep")) == true
+  end
+
+  test "saves the wide sweep switch as on or off" do
+    path = temporary_path("sweep")
+    on_exit(fn -> File.rm_rf!(Path.dirname(path)) end)
+
+    assert :ok = Settings.save_sweep(false, path)
+    assert Settings.read_sweep(path) == false
+    assert File.read!(path) == "off\n"
+    assert :ok = Settings.save_sweep("on", path)
+    assert Settings.read_sweep(path) == true
+    assert File.read!(path) == "on\n"
+  end
+
+  test "rejects an invalid sweep value without replacing the saved one" do
+    path = temporary_path("sweep")
+    on_exit(fn -> File.rm_rf!(Path.dirname(path)) end)
+    :ok = Settings.save_sweep(false, path)
+
+    for value <- ["maybe", "", nil, 1] do
+      assert {:error, :invalid_sweep} = Settings.save_sweep(value, path)
+    end
+
+    assert Settings.read_sweep(path) == false
+  end
+
+  test "falls back to on when the sweep file holds anything else" do
+    path = temporary_path("sweep")
+    on_exit(fn -> File.rm_rf!(Path.dirname(path)) end)
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, "disabled\n")
+
+    assert Settings.read_sweep(path) == true
+  end
+
   defp temporary_path(filename \\ "port") do
     Path.join(
       System.tmp_dir!(),
